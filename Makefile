@@ -16,5 +16,7 @@ endif
 
 all: nfportscan
 
+nfportscan: file.o
+
 clean:
 	rm -f nfportscan *.o

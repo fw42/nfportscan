@@ -8,8 +8,14 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "file.h"
+
+#define PROTO_TCP 6
+#define IPV4_ADDR_STR_LEN_MAX 20
 
 /* global options */
 typedef struct {
@@ -59,6 +65,7 @@ static int read_file(char *file)
     printf("    blocks: %d\n", header.NumBlocks);
     printf("    ident: \"%s\"\n", header.ident);
 #endif
+
     if (header.magic != FILE_MAGIC) {
         fprintf(stderr, "%s: wrong magic: 0x%04x\n", file, header.magic);
         close(fd);
@@ -92,6 +99,14 @@ static int read_file(char *file)
         return -6;
     }
 
+#ifdef DEBUG
+    printf("stat:\n");
+    printf("    flows: %llu\n", (unsigned long long)stats.numflows);
+    printf("    bytes: %llu\n", (unsigned long long)stats.numbytes);
+    printf("    packets: %llu\n", (unsigned long long)stats.numpackets);
+    printf("-------------------\n");
+#endif
+
     uint32_t blocks_remaining = header.NumBlocks;
     while (blocks_remaining > 0) {
 
@@ -118,9 +133,54 @@ static int read_file(char *file)
             fprintf(stderr, "%s: data block has unknown id %d\n", file, bheader.id);
         }
 
-        printf("%d\n", sizeof(master_record_t));
+        /* read complete block into buffer */
+        void *buf = malloc(bheader.size);
 
-        break;
+        if (buf == NULL) {
+            fprintf(stderr, "unable to allocate %d byte of memory\n", bheader.size);
+            exit(3);
+        }
+
+        if ( (len = read(fd, buf, bheader.size)) == -1) {
+            fprintf(stderr, "%s: read error: %s\n", file, strerror(errno));
+            close(fd);
+            return -1;
+        }
+
+        if ( len < (signed int)bheader.size ) {
+            fprintf(stderr, "%s: incomplete data block\n", file);
+            close(fd);
+            return -7;
+        }
+
+        common_record_t *c = buf;
+
+        while (bheader.NumBlocks--) {
+            /* expand common record into master record */
+            master_record_t mrec;
+            ExpandRecord(c, &mrec);
+
+            /* advance pointer */
+            c = (common_record_t *)((pointer_addr_t)c + c->size);
+
+            /* throw away everything except TCP in IPv4 flows */
+            if (mrec.prot != PROTO_TCP || mrec.flags & FLAG_IPV6_ADDR)
+                continue;
+
+            char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
+
+            /* convert source and destination ip to network byte order */
+            mrec.v4.srcaddr = htonl(mrec.v4.srcaddr);
+            mrec.v4.dstaddr = htonl(mrec.v4.dstaddr);
+
+            /* make strings from ips */
+            inet_ntop(AF_INET, &mrec.v4.srcaddr, src, sizeof(src));
+            inet_ntop(AF_INET, &mrec.v4.dstaddr, dst, sizeof(dst));
+
+            printf("flow: %s: %d -> %s: %d\n", src, mrec.srcport, dst, mrec.dstport);
+        }
+
+        free(buf);
 
         blocks_remaining--;
     }

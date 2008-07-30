@@ -3,8 +3,20 @@
  * copied from the nfdump project file nffile.h, version 1.5.7 on 2008/07/25
  */
 
+#ifndef _FILE_H
+#define _FILE_H
+
 #include <stdint.h>
 
+/* from common.h */
+#ifdef COMPILE_64BIT
+typedef uint64_t	pointer_addr_t;
+#else
+typedef uint32_t	pointer_addr_t;
+#endif
+
+
+/* from nffile.h */
 #define IdentLen	128
 #define IdentNone	"none"
 
@@ -81,7 +93,7 @@ typedef struct common_record_s {
 	uint16_t	dstport;
 	uint16_t	srcas;
 	uint16_t	dstas;
-	uint8_t		data[];	// .. more data below
+	uint8_t		data[4];	// .. more data below
 } common_record_t;
 
 typedef struct ipv4_block_s {
@@ -168,3 +180,179 @@ typedef struct master_record_s {
 
 } master_record_t;
 
+#define AnyMask  	0xffffffffffffffffLL
+
+#ifdef WORDS_BIGENDIAN
+
+#define OffsetRecordFlags 	0
+#define MaskRecordFlags  	0xffffffff00000000LL
+#define ShiftRecordFlags 	32
+
+#define OffsetDir 		2
+#define MaskDir	   		0x00000000ff000000LL
+#define ShiftDir  		24
+
+#define OffsetFlags 	2
+#define MaskFlags   	0x0000000000ff0000LL
+#define ShiftFlags  	16
+
+#define OffsetProto 	2
+#define MaskProto   	0x000000000000ff00LL
+#define ShiftProto  	8
+
+#define OffsetTos		2
+#define MaskTos	   		0x00000000000000ffLL
+#define ShiftTos  		0
+
+#define OffsetInOut 	3
+#define MaskInput		0xffff000000000000LL
+#define MaskOutput		0x0000ffff00000000LL
+#define ShiftInput 		48
+#define ShiftOutput 	32	
+
+#define OffsetPort 		3
+#define MaskDstPort 	0x000000000000ffffLL
+#define MaskSrcPort 	0x00000000ffff0000LL
+#define ShiftDstPort 	0
+#define ShiftSrcPort 	16
+#define MaskICMPtype	0x000000000000ff00LL
+#define MaskICMPcode	0x00000000000000ffLL
+#define ShiftICMPcode 	0
+#define ShiftICMPtype 	8
+
+#define OffsetAS 		4
+#define MaskDstAS 		0x0000ffff00000000LL
+#define MaskSrcAS 		0xffff000000000000LL
+#define ShiftSrcAS 		48
+#define ShiftDstAS 		32
+
+#define OffsetSrcIPv4 	6
+#define MaskSrcIPv4  	0x00000000ffffffffLL
+#define ShiftSrcIPv4 	0
+
+#define OffsetDstIPv4 	8
+#define MaskDstIPv4  	0x00000000ffffffffLL
+#define ShiftDstIPv4  	0	
+
+#define OffsetSrcIPv6a 	5
+#define OffsetSrcIPv6b 	6
+#define OffsetDstIPv6a 	7
+#define OffsetDstIPv6b 	8
+#define MaskIPv6  		0xffffffffffffffffLL
+#define ShiftIPv6 		0
+
+#define OffsetPackets 	9
+#define MaskPackets  	0xffffffffffffffffLL
+#define ShiftPackets 	0
+
+#define OffsetBytes 	10
+#define MaskBytes  		0xffffffffffffffffLL
+#define ShiftBytes 		0
+
+#else
+
+#define OffsetRecordFlags 	0
+#define MaskRecordFlags  	0x00000000ffffffffLL
+#define ShiftRecordFlags 	0
+
+#define OffsetDir 		2
+#define MaskDir	   		0x000000ff00000000LL
+#define ShiftDir  		32
+
+#define OffsetFlags 	2
+#define MaskFlags   	0x0000ff0000000000LL
+#define ShiftFlags  	40
+
+#define OffsetProto 	2
+#define MaskProto   	0x00ff000000000000LL
+#define ShiftProto  	48
+
+#define OffsetTos		2
+#define MaskTos	   		0xff00000000000000LL
+#define ShiftTos  		56
+
+#define OffsetInOut 	3
+#define MaskInput		0x000000000000ffffLL
+#define MaskOutput		0x00000000ffff0000LL
+#define ShiftInput 		0
+#define ShiftOutput 	16
+
+#define OffsetPort 		3
+#define MaskDstPort 	0xffff000000000000LL
+#define MaskSrcPort 	0x0000ffff00000000LL
+#define ShiftDstPort 	48
+#define ShiftSrcPort 	32
+#define MaskICMPtype	0xff00000000000000LL
+#define MaskICMPcode	0x00ff000000000000LL
+#define ShiftICMPcode 	48
+#define ShiftICMPtype 	56
+
+#define OffsetAS 		4
+#define MaskDstAS 		0x00000000ffff0000LL
+#define MaskSrcAS 		0x000000000000ffffLL
+#define ShiftSrcAS 		0
+#define ShiftDstAS 		16
+
+#define OffsetSrcIPv4 	6
+#define MaskSrcIPv4  	0xffffffff00000000LL
+#define ShiftSrcIPv4 	32
+
+#define OffsetDstIPv4 	8
+#define MaskDstIPv4  	0xffffffff00000000LL
+#define ShiftDstIPv4  	32
+
+#define OffsetSrcIPv6a 	5
+#define OffsetSrcIPv6b 	6
+#define OffsetDstIPv6a 	7
+#define OffsetDstIPv6b 	8
+#define MaskIPv6  		0xffffffffffffffffLL
+#define ShiftIPv6 		0
+
+#define OffsetPackets 	9
+#define MaskPackets  	0xffffffffffffffffLL
+#define ShiftPackets 	0
+
+#define OffsetBytes 	10
+#define MaskBytes  		0xffffffffffffffffLL
+#define ShiftBytes 		0
+
+#endif
+
+
+/*
+ * flags:
+ * bit  0:	0: IPv4				1: IPv6
+ * bit  1:	0: 32bit dPkts		1: 64bit dPkts
+ * bit  2:	0: 32bit dOctets	1: 64bit dOctets 
+ * more to come ...
+ *
+ * bit 31:	reserved for future use. must be 0.
+ */
+
+#define FLAG_IPV6_ADDR	1
+#define FLAG_PKG_64		2
+#define FLAG_BYTES_64	4
+
+/*
+ * offset translation table
+ * In netflow v9 values may have a different length, and may or may not be present.
+ * The commmon information ( see data_block_record_t ) is expected to be present
+ * unconditionally, and has a fixed size. IP addrs as well as counters for packets and
+ * bytes are expexted to exist as well, but may be variable in size. Further information
+ * may or may not be present, according the flags. See flags
+ * To cope with this situation, the offset translation table gives the offset into an
+ * uint32_t array at which offset the requested value start.
+ *
+ * index:
+ *	 0:	dstip
+ *				for IPv4 netflow v5/v7	10
+ *	 1: dPkts
+ * 				for IPv4 netflow v5/v7	11
+ *	 2: dOctets
+ * 				for IPv4 netflow v5/v7	12
+ */
+
+/* prototypes */
+void ExpandRecord(common_record_t *input_record,master_record_t *output_record );
+
+#endif
