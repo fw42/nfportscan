@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/queue.h>
 
 #include "file.h"
 
@@ -20,9 +21,14 @@
 /* global options */
 typedef struct {
     unsigned int verbose;
+    unsigned int flows;
+    unsigned int ssh_flows;
 } options_t;
 
 options_t opts;
+
+/* structures for counting ssh flows */
+
 
 static void print_help(FILE *output)
 {
@@ -31,9 +37,42 @@ static void print_help(FILE *output)
                     "  -h    --help      print this help\n");
 }
 
-static int read_file(char *file)
+static int process_flow(master_record_t *mrec)
 {
-    printf("processing file %s\n", file);
+    /* count flows */
+    opts.flows++;
+
+    /* throw away everything except TCP in IPv4 flows */
+    if (mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
+        return 0;
+
+    /* throw away everything except destination port 22 */
+    if (mrec->dstport != 22)
+        return 0;
+
+    /* count ssh flows */
+    opts.ssh_flows++;
+
+    char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
+
+    /* convert source and destination ip to network byte order */
+    mrec->v4.srcaddr = htonl(mrec->v4.srcaddr);
+    mrec->v4.dstaddr = htonl(mrec->v4.dstaddr);
+
+    /* make strings from ips */
+    inet_ntop(AF_INET, &mrec->v4.srcaddr, src, sizeof(src));
+    inet_ntop(AF_INET, &mrec->v4.dstaddr, dst, sizeof(dst));
+
+    if (opts.verbose >= 4)
+        printf("tcp4 flow: %s: %d -> %s: %d\n", src, mrec->srcport, dst, mrec->dstport);
+
+    return 1;
+}
+
+static int process_file(char *file)
+{
+    if (opts.verbose)
+        printf("processing file %s\n", file);
 
     int fd;
     if ( (fd = open(file, O_RDONLY)) == -1 ) {
@@ -57,14 +96,14 @@ static int read_file(char *file)
         return -2;
     }
 
-#ifdef DEBUG
-    printf("header says:\n");
-    printf("    magic: 0x%04x\n", header.magic);
-    printf("    version: 0x%04x\n", header.version);
-    printf("    flags: 0x%x\n", header.flags);
-    printf("    blocks: %d\n", header.NumBlocks);
-    printf("    ident: \"%s\"\n", header.ident);
-#endif
+    if (opts.verbose >= 2) {
+        printf("header says:\n");
+        printf("    magic: 0x%04x\n", header.magic);
+        printf("    version: 0x%04x\n", header.version);
+        printf("    flags: 0x%x\n", header.flags);
+        printf("    blocks: %d\n", header.NumBlocks);
+        printf("    ident: \"%s\"\n", header.ident);
+    }
 
     if (header.magic != FILE_MAGIC) {
         fprintf(stderr, "%s: wrong magic: 0x%04x\n", file, header.magic);
@@ -99,16 +138,15 @@ static int read_file(char *file)
         return -6;
     }
 
-#ifdef DEBUG
-    printf("stat:\n");
-    printf("    flows: %llu\n", (unsigned long long)stats.numflows);
-    printf("    bytes: %llu\n", (unsigned long long)stats.numbytes);
-    printf("    packets: %llu\n", (unsigned long long)stats.numpackets);
-    printf("-------------------\n");
-#endif
+    if (opts.verbose >= 2) {
+        printf("stat:\n");
+        printf("    flows: %llu\n", (unsigned long long)stats.numflows);
+        printf("    bytes: %llu\n", (unsigned long long)stats.numbytes);
+        printf("    packets: %llu\n", (unsigned long long)stats.numpackets);
+        printf("-------------------\n");
+    }
 
-    uint32_t blocks_remaining = header.NumBlocks;
-    while (blocks_remaining > 0) {
+    while(header.NumBlocks--) {
 
         /* read block header */
         data_block_header_t bheader;
@@ -124,10 +162,12 @@ static int read_file(char *file)
             return -7;
         }
 
-        printf("    data block header:\n");
-        printf("        data records: %d\n", bheader.NumBlocks);
-        printf("        size: %d bytes\n", bheader.size);
-        printf("        id: %d\n", bheader.id);
+        if (opts.verbose >= 3) {
+            printf("    data block header:\n");
+            printf("        data records: %d\n", bheader.NumBlocks);
+            printf("        size: %d bytes\n", bheader.size);
+            printf("        id: %d\n", bheader.id);
+        }
 
         if (bheader.id != DATA_BLOCK_TYPE_1) {
             fprintf(stderr, "%s: data block has unknown id %d\n", file, bheader.id);
@@ -163,26 +203,10 @@ static int read_file(char *file)
             /* advance pointer */
             c = (common_record_t *)((pointer_addr_t)c + c->size);
 
-            /* throw away everything except TCP in IPv4 flows */
-            if (mrec.prot != PROTO_TCP || mrec.flags & FLAG_IPV6_ADDR)
-                continue;
-
-            char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
-
-            /* convert source and destination ip to network byte order */
-            mrec.v4.srcaddr = htonl(mrec.v4.srcaddr);
-            mrec.v4.dstaddr = htonl(mrec.v4.dstaddr);
-
-            /* make strings from ips */
-            inet_ntop(AF_INET, &mrec.v4.srcaddr, src, sizeof(src));
-            inet_ntop(AF_INET, &mrec.v4.dstaddr, dst, sizeof(dst));
-
-            printf("flow: %s: %d -> %s: %d\n", src, mrec.srcport, dst, mrec.dstport);
+            process_flow(&mrec);
         }
 
         free(buf);
-
-        blocks_remaining--;
     }
 
     close(fd);
@@ -199,9 +223,11 @@ int main(int argc, char *argv[])
 
     /* initialize options */
     opts.verbose = 0;
+    opts.flows = 0;
+    opts.ssh_flows = 0;
 
     int c;
-    while ((c = getopt_long(argc, argv, "h", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hv", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -214,8 +240,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    if (argv[optind] == NULL)
+        printf("no files given, use %s --help for more information\n", argv[0]);
+
     while (argv[optind] != NULL)
-        read_file(argv[optind++]);
+        process_file(argv[optind++]);
+
+    if (opts.verbose)
+        printf("scanned %u flows, found %u ssh flows (%.2f%%)\n", opts.flows, opts.ssh_flows, (double)opts.ssh_flows/(double)opts.flows * 100);
 
     return EXIT_SUCCESS;
 }
