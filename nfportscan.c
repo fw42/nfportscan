@@ -14,6 +14,7 @@
 #include <sys/queue.h>
 
 #include "file.h"
+#include "list.h"
 
 #define PROTO_TCP 6
 #define IPV4_ADDR_STR_LEN_MAX 20
@@ -26,21 +27,6 @@ typedef struct {
 } options_t;
 
 options_t opts;
-
-/* structures for counting ssh flows */
-typedef struct {
-    uint32_t srcaddr;
-    uint16_t dstport;
-    unsigned int flows;
-} incident_record_t;
-
-typedef struct {
-    unsigned int length;
-    unsigned int fill;
-    unsigned int global_flows;
-    unsigned int incident_flows;
-    incident_record_t records[];
-} incident_list_t;
 
 static void print_help(FILE *output)
 {
@@ -79,48 +65,20 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
         printf("incident flow: %s: %d -> %s: %d\n", src, mrec->srcport, dst, mrec->dstport);
     }
 
-    /* scan through incident list, search for tuple (srcaddr, dstport) */
-    for (unsigned int i = 0; i < (*list)->fill; i++) {
-        if ((*list)->records[i].srcaddr == mrec->v4.srcaddr &&
-            (*list)->records[i].dstport == mrec->dstport) {
-            /* record already in list, just increment counter */
-            (*list)->records[i].flows++;
-            if (opts.verbose >= 3)
-                printf("found record in incident list, index %u, flows %u\n",
-                        i, (*list)->records[i].flows);
-            return 1;
-        }
-    }
+    /* search for tuple (srcaddr, dstport) */
+    int pos = list_search(list, mrec->v4.srcaddr, mrec->dstport);
 
-    /* else allocate new record */
-    if (opts.verbose >= 3)
-        printf("record not found in list, creating new\n");
+    if (pos < 0) {
+        //printf("%10u %10u\n", (*list)->fill, (*list)->length);
+        pos = list_insert(list, mrec->v4.srcaddr, mrec->dstport);
 
-    /* first, test if we have to extend the list */
-    if ((*list)->fill == (*list)->length) {
-        //if (opts.verbose >= 4)
-        if (opts.verbose)
-            printf("extending list from %u entries to %u\n",
-                   (*list)->length, (*list)->length + INCIDENT_LIST_EXPAND);
-
-        (*list)->length += INCIDENT_LIST_EXPAND;
-        unsigned int new_size = (*list)->length * sizeof(incident_record_t)
-            + sizeof(incident_list_t);
-        *list = realloc(*list, new_size);
-
-        if (*list == NULL) {
-            fprintf(stderr, "unable to expand incident list, realloc() failed\n");
+        if (pos < 0) {
+            fprintf(stderr, "error inserting into list\n");
             exit(3);
         }
-
     }
 
-    /* next, insert */
-    unsigned int new = (*list)->fill++;
-    (*list)->records[new].srcaddr = mrec->v4.srcaddr;
-    (*list)->records[new].dstport = mrec->dstport;
-    (*list)->records[new].flows = 1;
-
+    (*list)->records[pos].flows++;
     return 1;
 }
 
@@ -297,16 +255,9 @@ int main(int argc, char *argv[])
         printf("no files given, use %s --help for more information\n", argv[0]);
 
     /* init incident list */
-    incident_list_t *list = malloc(sizeof(incident_list_t) +
-            INCIDENT_LIST_INITIAL * sizeof(incident_record_t));
-
-    if (list == NULL) {
-        fprintf(stderr, "unable to allocate memory for incident list\n");
-        exit(3);
-    }
-
-    list->length = INCIDENT_LIST_INITIAL;
-    list->fill = 0;
+    incident_list_t *list = list_init(INCIDENT_LIST_INITIAL, INCIDENT_LIST_EXPAND);
+    list->global_flows = 0;
+    list->incident_flows = 0;
 
     while (argv[optind] != NULL)
         process_file(argv[optind++], &list);
@@ -317,6 +268,7 @@ int main(int argc, char *argv[])
 
     printf("list size: %u\n", list->fill);
 
+#if 0
     for (unsigned int i = 0; i < list->fill; i++) {
         char src[IPV4_ADDR_STR_LEN_MAX];
 
@@ -327,6 +279,7 @@ int main(int argc, char *argv[])
         inet_ntop(AF_INET, &list->records[i].srcaddr, src, sizeof(src));
         printf(" * %s: %u\n", src, list->records[i].flows);
     }
+#endif
 
     free(list);
 

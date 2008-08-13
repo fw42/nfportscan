@@ -64,10 +64,10 @@ int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport)
 
     l->records[pos].srcaddr = srcaddr;
     l->records[pos].dstport = dstport;
-    l->records[pos].flows = 1;
+    l->records[pos].flows = 0;
     l->fill++;
 
-    return 0;
+    return pos;
 }
 
 int list_search(incident_list_t **list, uint32_t srcaddr, uint16_t dstport)

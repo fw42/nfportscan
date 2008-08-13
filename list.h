@@ -23,7 +23,7 @@ typedef struct {
  * afterwards, memory must be free()d later */
 incident_list_t *list_init(unsigned int initial_size, unsigned int increment);
 
-/* returns 0 on success, 1 if list has to be grown, < 0 if error occured */
+/* returns index on success, < 0 if error occured */
 int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport);
 
 /* returns index on success, -1 if not found */

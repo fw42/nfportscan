@@ -16,7 +16,7 @@ endif
 
 all: nfportscan
 
-nfportscan: file.o
+nfportscan: file.o list.o
 
 testlist: list.o
 
