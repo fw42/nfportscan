@@ -18,5 +18,7 @@ all: nfportscan
 
 nfportscan: file.o
 
+testlist: list.o
+
 clean:
 	rm -f nfportscan *.o
