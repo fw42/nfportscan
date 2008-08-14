@@ -24,6 +24,7 @@
 /* global options */
 typedef struct {
     unsigned int verbose;
+    unsigned int threshhold;
 } options_t;
 
 options_t opts;
@@ -31,8 +32,10 @@ options_t opts;
 static void print_help(FILE *output)
 {
     fprintf(output, "USAGE: nfportscan [OPTIONS] FILE [FILE] ...\n"
-                    "  -v    --verbose   set verbosity level\n"
-                    "  -h    --help      print this help\n");
+                    "  -t    --threshhold   set flow minimom for an ip address to be reported\n"
+                    "                       (default: 100)\n"
+                    "  -v    --verbose      set verbosity level\n"
+                    "  -h    --help         print this help\n");
 }
 
 static int process_flow(master_record_t *mrec, incident_list_t **list)
@@ -45,8 +48,8 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
         return 0;
 
     /* throw away everything except destination port 22 */
-    //if (mrec->dstport != 22)
-    //    return 0;
+    if (mrec->dstport != 22)
+        return 0;
 
     /* count flows */
     (*list)->incident_flows++;
@@ -231,25 +234,32 @@ int main(int argc, char *argv[])
     const struct option longopts[] = {
         {"help", no_argument, 0, 'h'},
         {"verbose", no_argument, 0, 'v'},
+        {"threshhold", required_argument, 0, 't'},
         { NULL, 0, 0, 0 }
     };
 
     /* initialize options */
     opts.verbose = 0;
+    opts.threshhold = 100;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hv", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
                       break;
             case 'v': opts.verbose++;
                       break;
+            case 't': opts.threshhold = atoi(optarg);
+                      break;
             case '?': print_help(stderr);
                       exit(1);
                       break;
         }
     }
+
+    if (opts.verbose)
+        printf("threshhold is %u\n", opts.threshhold);
 
     if (argv[optind] == NULL)
         printf("no files given, use %s --help for more information\n", argv[0]);
@@ -266,11 +276,15 @@ int main(int argc, char *argv[])
         printf("scanned %u flows, found %u ssh flows (%.2f%%)\n", list->global_flows,
                 list->incident_flows, (double)list->incident_flows/(double)list->global_flows * 100);
 
-    printf("list size: %u\n", list->fill);
+    if (opts.verbose)
+        printf("list size: %u\n", list->fill);
 
-#if 0
+#if 1
     for (unsigned int i = 0; i < list->fill; i++) {
         char src[IPV4_ADDR_STR_LEN_MAX];
+
+        if (list->records[i].flows <= opts.threshhold)
+            continue;
 
         /* convert source and destination ip to network byte order */
         list->records[i].srcaddr = htonl(list->records[i].srcaddr);
