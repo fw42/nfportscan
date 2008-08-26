@@ -1,6 +1,6 @@
 DEBUG = 1
 
-CFLAGS += -g -Wall -std=gnu99
+CFLAGS += -g -Wall -std=gnu99 -O2
 
 ifeq ($(DEBUG),1)
 	CFLAGS += -Wall -W -Wchar-subscripts -Wmissing-prototypes
