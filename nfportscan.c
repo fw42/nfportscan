@@ -17,6 +17,7 @@
 #include "list.h"
 
 #define PROTO_TCP 6
+#define PROTO_UDP 17
 #define IPV4_ADDR_STR_LEN_MAX 20
 #define INCIDENT_LIST_INITIAL 1000
 #define INCIDENT_LIST_EXPAND 1000
@@ -43,12 +44,14 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     /* count global flows */
     (*list)->global_flows++;
 
-    /* throw away everything except TCP in IPv4 flows */
-    if (mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
+    /* throw away everything except TCP or UDP IPv4 flows */
+    //if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
+    //       || mrec->flags & FLAG_IPV6_ADDR)
+    //   return 0;
+    if ( mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
         return 0;
 
-    /* throw away everything except destination port 22 */
-    if (mrec->dstport != 22)
+    if ( mrec->dstport == 80 )
         return 0;
 
     /* count flows */
@@ -279,7 +282,6 @@ int main(int argc, char *argv[])
     if (opts.verbose)
         printf("list size: %u\n", list->fill);
 
-#if 1
     for (unsigned int i = 0; i < list->fill; i++) {
         char src[IPV4_ADDR_STR_LEN_MAX];
 
@@ -291,9 +293,8 @@ int main(int argc, char *argv[])
 
         /* make strings from ips */
         inet_ntop(AF_INET, &list->records[i].srcaddr, src, sizeof(src));
-        printf(" * %s: %u\n", src, list->records[i].flows);
+        printf(" * %s -> %5u: %u\n", src, list->records[i].dstport, list->records[i].flows);
     }
-#endif
 
     free(list);
 
