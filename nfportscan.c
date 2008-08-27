@@ -33,7 +33,7 @@ options_t opts;
 static void print_help(FILE *output)
 {
     fprintf(output, "USAGE: nfportscan [OPTIONS] FILE [FILE] ...\n"
-                    "  -t    --threshhold   set flow minimom for an ip address to be reported\n"
+                    "  -t    --threshhold   set flow minimum for an ip address to be reported\n"
                     "                       (default: 100)\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
