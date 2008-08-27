@@ -19,8 +19,8 @@
 #define PROTO_TCP 6
 #define PROTO_UDP 17
 #define IPV4_ADDR_STR_LEN_MAX 20
-#define INCIDENT_LIST_INITIAL 1000
-#define INCIDENT_LIST_EXPAND 1000
+#define INCIDENT_LIST_INITIAL 10
+#define INCIDENT_LIST_EXPAND 10
 
 /* global options */
 typedef struct {
@@ -41,21 +41,25 @@ static void print_help(FILE *output)
 
 static int process_flow(master_record_t *mrec, incident_list_t **list)
 {
+    incident_list_t *l = *list;
     /* count global flows */
-    (*list)->global_flows++;
+    l->flows++;
 
     /* throw away everything except TCP or UDP IPv4 flows */
     //if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
     //       || mrec->flags & FLAG_IPV6_ADDR)
     //   return 0;
-    if ( mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
+    //if ( mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
+    //    return 0;
+    if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
+                || mrec->flags & FLAG_IPV6_ADDR)
         return 0;
 
     if ( mrec->dstport == 80 )
         return 0;
 
     /* count flows */
-    (*list)->incident_flows++;
+    l->incident_flows++;
 
     if (opts.verbose >= 4) {
         char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
@@ -71,20 +75,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
         printf("incident flow: %s: %d -> %s: %d\n", src, mrec->srcport, dst, mrec->dstport);
     }
 
-    /* search for tuple (srcaddr, dstport) */
-    int pos = list_search(list, mrec->v4.srcaddr, mrec->dstport);
-
-    if (pos < 0) {
-        //printf("%10u %10u\n", (*list)->fill, (*list)->length);
-        pos = list_insert(list, mrec->v4.srcaddr, mrec->dstport);
-
-        if (pos < 0) {
-            fprintf(stderr, "error inserting into list\n");
-            exit(3);
-        }
-    }
-
-    (*list)->records[pos].flows++;
+    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->v4.dstaddr);
     return 1;
 }
 
@@ -269,34 +260,39 @@ int main(int argc, char *argv[])
 
     /* init incident list */
     incident_list_t *list = list_init(INCIDENT_LIST_INITIAL, INCIDENT_LIST_EXPAND);
-    list->global_flows = 0;
+    list->flows = 0;
     list->incident_flows = 0;
 
     while (argv[optind] != NULL)
         process_file(argv[optind++], &list);
 
     if (opts.verbose)
-        printf("scanned %u flows, found %u ssh flows (%.2f%%)\n", list->global_flows,
-                list->incident_flows, (double)list->incident_flows/(double)list->global_flows * 100);
+        printf("scanned %u flows, found %u incident flows (%.2f%%)\n", list->flows,
+                list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
 
-    if (opts.verbose)
-        printf("list size: %u\n", list->fill);
+    for (unsigned int h = 0; h < HASH_SIZE; h++) {
+        if (list->hashtable[h]->fill) {
+            // printf("hash %4x:\n", h);
+            hashtable_entry_t *ht = list->hashtable[h];
+            for (unsigned int i = 0; i < ht->fill; i++) {
+                if (ht->records[i]->fill > opts.threshhold) {
 
-    for (unsigned int i = 0; i < list->fill; i++) {
-        char src[IPV4_ADDR_STR_LEN_MAX];
+                    char src[IPV4_ADDR_STR_LEN_MAX];
 
-        if (list->records[i].flows <= opts.threshhold)
-            continue;
+                    /* convert source ip to network byte order */
+                    ht->records[i]->srcaddr = htonl(ht->records[i]->srcaddr);
+                    /* make string from ip */
+                    inet_ntop(AF_INET, &ht->records[i]->srcaddr, src, sizeof(src));
 
-        /* convert source and destination ip to network byte order */
-        list->records[i].srcaddr = htonl(list->records[i].srcaddr);
-
-        /* make strings from ips */
-        inet_ntop(AF_INET, &list->records[i].srcaddr, src, sizeof(src));
-        printf(" * %s -> %5u: %u\n", src, list->records[i].dstport, list->records[i].flows);
+                    printf("  * %15s -> %5u : %10u dsthosts (%10u flows)\n",
+                            src, ht->records[i]->dstport,
+                            ht->records[i]->fill, ht->records[i]->flows);
+                }
+            }
+        }
     }
 
-    free(list);
+    list_free(list);
 
     return EXIT_SUCCESS;
 }
