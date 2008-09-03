@@ -21,11 +21,22 @@
 #define IPV4_ADDR_STR_LEN_MAX 20
 #define INCIDENT_LIST_INITIAL 10
 #define INCIDENT_LIST_EXPAND 10
+#define SORT_LIST_INITIAL 1000
+#define SORT_LIST_EXPAND 100
 
 /* global options */
 typedef struct {
     unsigned int verbose;
     unsigned int threshhold;
+    enum {
+        SORT_HOSTS,
+        SORT_FLOWS,
+        SORT_IP,
+    } sort_field;
+    enum {
+        SORT_DESC,
+        SORT_ASC,
+    } sort_order;
 } options_t;
 
 options_t opts;
@@ -37,6 +48,36 @@ static void print_help(FILE *output)
                     "                       (default: 100)\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
+}
+
+static int incident_compare(const void *a, const void *b) {
+    incident_record_t *ia = (incident_record_t *)a;
+    incident_record_t *ib = (incident_record_t *)b;
+
+    if (opts.sort_field == SORT_HOSTS) {
+        if (ia->fill < ib->fill)
+            return opts.sort_order == SORT_ASC ? -1 : 1;
+        else if (ia->fill > ib->fill)
+            return opts.sort_order == SORT_ASC ? 1 : -1;
+        else
+            return 0;
+    } else if (opts.sort_field == SORT_FLOWS) {
+        if (ia->flows < ib->flows)
+            return opts.sort_order == SORT_ASC ? -1 : 1;
+        else if (ia->flows > ib->flows)
+            return opts.sort_order == SORT_ASC ? 1 : -1;
+        else
+            return 0;
+    } else if (opts.sort_field == SORT_IP) {
+        if (ia->srcaddr < ib->srcaddr)
+            return opts.sort_order == SORT_ASC ? -1 : 1;
+        else if (ia->srcaddr > ib->srcaddr)
+            return opts.sort_order == SORT_ASC ? 1 : -1;
+        else
+            return 0;
+    }
+
+    return 0;
 }
 
 static int process_flow(master_record_t *mrec, incident_list_t **list)
@@ -61,6 +102,9 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     /* count flows */
     l->incident_flows++;
 
+    /* insert into list */
+    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->v4.dstaddr);
+
     if (opts.verbose >= 4) {
         char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
 
@@ -75,7 +119,6 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
         printf("incident flow: %s: %d -> %s: %d\n", src, mrec->srcport, dst, mrec->dstport);
     }
 
-    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->v4.dstaddr);
     return 1;
 }
 
@@ -229,15 +272,22 @@ int main(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"verbose", no_argument, 0, 'v'},
         {"threshhold", required_argument, 0, 't'},
+        {"sort-hosts", no_argument, 0, 'H'},
+        {"sort-flows", no_argument, 0, 'f'},
+        {"sort-ip", no_argument, 0, 'i'},
+        {"order-ascending", no_argument, 0, 'a'},
+        {"order-descending", no_argument, 0, 'd'},
         { NULL, 0, 0, 0 }
     };
 
     /* initialize options */
     opts.verbose = 0;
     opts.threshhold = 100;
+    opts.sort_field = SORT_HOSTS;
+    opts.sort_order = SORT_DESC;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:Hfiad", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -246,14 +296,40 @@ int main(int argc, char *argv[])
                       break;
             case 't': opts.threshhold = atoi(optarg);
                       break;
+            case 'H': opts.sort_field = SORT_HOSTS;
+                      break;
+            case 'f': opts.sort_field = SORT_FLOWS;
+                      break;
+            case 'i': opts.sort_field = SORT_IP;
+                      break;
+            case 'a': opts.sort_order = SORT_ASC;
+                      break;
+            case 'd': opts.sort_order = SORT_DESC;
+                      break;
             case '?': print_help(stderr);
                       exit(1);
                       break;
         }
     }
 
-    if (opts.verbose)
-        printf("threshhold is %u\n", opts.threshhold);
+    if (opts.verbose) {
+        printf("threshhold is %u, sorting by ", opts.threshhold);
+        switch (opts.sort_field) {
+            case SORT_HOSTS: printf("destination hosts ");
+                             break;
+            case SORT_FLOWS: printf("flows ");
+                             break;
+            case SORT_IP: printf("source ip ");
+                             break;
+        }
+
+        switch (opts.sort_order) {
+            case SORT_ASC: printf("(ascending)\n");
+                           break;
+            case SORT_DESC: printf("(descending)\n");
+                           break;
+        }
+    }
 
     if (argv[optind] == NULL)
         printf("no files given, use %s --help for more information\n", argv[0]);
@@ -270,6 +346,23 @@ int main(int argc, char *argv[])
         printf("scanned %u flows, found %u incident flows (%.2f%%)\n", list->flows,
                 list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
 
+    /* allocate memory for sorted output list */
+    struct {
+        unsigned int fill;
+        unsigned int length;
+        incident_record_t *list;
+    } result;
+
+    result.fill = 0;
+    result.length = SORT_LIST_INITIAL;
+    result.list = malloc(SORT_LIST_INITIAL * sizeof(incident_record_t));
+
+    if (result.list == NULL) {
+        fprintf(stderr, "unable to allocate %d byte of memory for sorted list\n", 
+                result.length * sizeof(incident_record_t));
+        exit(3);
+    }
+
     for (unsigned int h = 0; h < HASH_SIZE; h++) {
         if (list->hashtable[h]->fill) {
             // printf("hash %4x:\n", h);
@@ -277,21 +370,44 @@ int main(int argc, char *argv[])
             for (unsigned int i = 0; i < ht->fill; i++) {
                 if (ht->records[i]->fill > opts.threshhold) {
 
-                    char src[IPV4_ADDR_STR_LEN_MAX];
+                    if (result.fill == result.length) {
+                        result.length += SORT_LIST_EXPAND;
+                        result.list = realloc(result.list,
+                                result.length * sizeof(incident_record_t));
 
-                    /* convert source ip to network byte order */
-                    ht->records[i]->srcaddr = htonl(ht->records[i]->srcaddr);
-                    /* make string from ip */
-                    inet_ntop(AF_INET, &ht->records[i]->srcaddr, src, sizeof(src));
+                        if (result.list == NULL) {
+                            fprintf(stderr, "unable to expand sorted list\n");
+                            exit(3);
+                        }
+                    }
 
-                    printf("  * %15s -> %5u : %10u dsthosts (%10u flows)\n",
-                            src, ht->records[i]->dstport,
-                            ht->records[i]->fill, ht->records[i]->flows);
+                    memcpy(&result.list[result.fill++], ht->records[i],
+                            sizeof(incident_record_t));
+
                 }
             }
         }
     }
 
+    if (opts.verbose)
+        printf("sorting result list...\n");
+
+    qsort(&result.list[0], result.fill, sizeof(incident_record_t), incident_compare);
+
+    for (unsigned int i = 0; i < result.fill; i++) {
+        char src[IPV4_ADDR_STR_LEN_MAX];
+
+        /* convert source ip to network byte order */
+        result.list[i].srcaddr = htonl(result.list[i].srcaddr);
+        /* make string from ip */
+        inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
+
+        printf("  * %15s -> %5u : %10u dsthosts (%10u flows)\n",
+                src, result.list[i].dstport,
+                result.list[i].fill, result.list[i].flows);
+    }
+
+    free(result.list);
     list_free(list);
 
     return EXIT_SUCCESS;
