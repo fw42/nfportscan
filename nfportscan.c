@@ -48,7 +48,12 @@ typedef struct {
         unsigned int fill;
         unsigned int length;
         ip_network_t *list;
-    } whitelist;
+    } net_whitelist;
+    struct {
+        unsigned int fill;
+        unsigned int length;
+        uint16_t *list;
+    } port_whitelist;
 } options_t;
 
 options_t opts;
@@ -64,6 +69,8 @@ static void print_help(FILE *output)
                     "  -a    --order-asceding   sort list ascending\n"
                     "  -d    --order-desceding  sort list descending\n"
                     "  -w    --whitelist-network    whitelist a network (in CIDR)\n"
+                    "  -p    --whitelist-port       whitelist a network (in CIDR)\n"
+                    "                (whitelist options can be specified multiple times)\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
 }
@@ -339,31 +346,72 @@ static void add_whitelist_network(char *str)
     /* make string from ip */
     inet_ntop(AF_INET, &base_addr, src, sizeof(src));
 
-    if (opts.whitelist.fill == opts.whitelist.length) {
-        opts.whitelist.length += WHITE_LIST_EXPAND;
-        opts.whitelist.list = realloc(opts.whitelist.list,
-                opts.whitelist.length * sizeof(ip_network_t));
+    if (opts.net_whitelist.fill == opts.net_whitelist.length) {
+        opts.net_whitelist.length += WHITE_LIST_EXPAND;
+        opts.net_whitelist.list = realloc(opts.net_whitelist.list,
+                opts.net_whitelist.length * sizeof(ip_network_t));
 
-        if (opts.whitelist.list == NULL) {
+        if (opts.net_whitelist.list == NULL) {
             fprintf(stderr, "unable to allocate %d byte of memory for ip network whitelist\n",
                     WHITE_LIST_INITIAL * sizeof(ip_network_t));
             exit(3);
         }
     }
 
-    opts.whitelist.list[opts.whitelist.fill].baseaddr = cidr_base_addr;
-    opts.whitelist.list[opts.whitelist.fill].bits = cidr_bits;
-    opts.whitelist.fill++;
+    opts.net_whitelist.list[opts.net_whitelist.fill].baseaddr = cidr_base_addr;
+    opts.net_whitelist.list[opts.net_whitelist.fill].bits = cidr_bits;
+    opts.net_whitelist.fill++;
 
     if (opts.verbose >= 3)
         printf("whitelisted network: %s/%u\n", src, cidr_bits);
 }
 
+static void add_whitelist_port(char *str)
+{
+    int p = atoi(str);
+
+    if (p < 0 || p > 65535) {
+        fprintf(stderr, "ERROR: invalid port: %s\n", str);
+        exit(7);
+    }
+
+    uint16_t port = (uint16_t)p;
+
+    if (opts.port_whitelist.fill == opts.port_whitelist.length) {
+        opts.port_whitelist.length += WHITE_LIST_EXPAND;
+        opts.port_whitelist.list = realloc(opts.port_whitelist.list,
+                opts.port_whitelist.length * sizeof(uint16_t));
+
+        if (opts.port_whitelist.list == NULL) {
+            fprintf(stderr, "unable to allocate %d byte of memory for ip network whitelist\n",
+                    WHITE_LIST_INITIAL * sizeof(uint16_t));
+            exit(3);
+        }
+    }
+
+    opts.port_whitelist.list[opts.port_whitelist.fill] = port;
+    opts.port_whitelist.fill++;
+
+    if (opts.verbose >= 3)
+        printf("whitelisted port: %u\n", port);
+
+}
+
 static int address_whitelisted(uint32_t addr)
 {
-    for (unsigned int i = 0; i < opts.whitelist.fill; i++) {
-        uint32_t mask = ~(uint32_t)((uint64_t)(1<<(32-opts.whitelist.list[i].bits))-1);
-        if (opts.whitelist.list[i].baseaddr == (addr & mask))
+    for (unsigned int i = 0; i < opts.net_whitelist.fill; i++) {
+        uint32_t mask = ~(uint32_t)((uint64_t)(1<<(32-opts.net_whitelist.list[i].bits))-1);
+        if (opts.net_whitelist.list[i].baseaddr == (addr & mask))
+            return 1;
+    }
+
+    return 0;
+}
+
+static int port_whitelisted(uint16_t port)
+{
+    for (unsigned int i = 0; i < opts.port_whitelist.fill; i++) {
+        if (opts.port_whitelist.list[i] == port)
             return 1;
     }
 
@@ -382,6 +430,7 @@ int main(int argc, char *argv[])
         {"order-ascending", no_argument, 0, 'a'},
         {"order-descending", no_argument, 0, 'd'},
         {"whitelist-network", required_argument, 0, 'w'},
+        {"whitelist-port", required_argument, 0, 'p'},
         { NULL, 0, 0, 0 }
     };
 
@@ -390,18 +439,28 @@ int main(int argc, char *argv[])
     opts.threshhold = 100;
     opts.sort_field = SORT_HOSTS;
     opts.sort_order = SORT_DESC;
-    opts.whitelist.fill = 0;
-    opts.whitelist.length = WHITE_LIST_INITIAL;
-    opts.whitelist.list = malloc(WHITE_LIST_INITIAL * sizeof(ip_network_t));
+    opts.net_whitelist.fill = 0;
+    opts.net_whitelist.length = WHITE_LIST_INITIAL;
+    opts.net_whitelist.list = malloc(WHITE_LIST_INITIAL * sizeof(ip_network_t));
 
-    if (opts.whitelist.list == NULL) {
+    if (opts.net_whitelist.list == NULL) {
         fprintf(stderr, "unable to allocate %d byte of memory for ip network whitelist\n",
                 WHITE_LIST_INITIAL * sizeof(ip_network_t));
         exit(3);
     }
 
+    opts.port_whitelist.fill = 0;
+    opts.port_whitelist.length = WHITE_LIST_INITIAL;
+    opts.port_whitelist.list = malloc(WHITE_LIST_INITIAL * sizeof(uint16_t));
+
+    if (opts.port_whitelist.list == NULL) {
+        fprintf(stderr, "unable to allocate %d byte of memory for ip network whitelist\n",
+                WHITE_LIST_INITIAL * sizeof(uint16_t));
+        exit(3);
+    }
+
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:Hfiadw:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:Hfiadw:p:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -421,6 +480,8 @@ int main(int argc, char *argv[])
             case 'd': opts.sort_order = SORT_DESC;
                       break;
             case 'w': add_whitelist_network(optarg);
+                      break;
+            case 'p': add_whitelist_port(optarg);
                       break;
             case '?': print_help(stderr);
                       exit(1);
@@ -485,7 +546,8 @@ int main(int argc, char *argv[])
             hashtable_entry_t *ht = list->hashtable[h];
             for (unsigned int i = 0; i < ht->fill; i++) {
                 if (ht->records[i]->fill > opts.threshhold &&
-                    !address_whitelisted(ht->records[i]->srcaddr)) {
+                    !address_whitelisted(ht->records[i]->srcaddr) &&
+                    !port_whitelisted(ht->records[i]->dstport)) {
 
                     if (result.fill == result.length) {
                         result.length += SORT_LIST_EXPAND;
@@ -524,7 +586,8 @@ int main(int argc, char *argv[])
                 result.list[i].fill, result.list[i].flows);
     }
 
-    free(opts.whitelist.list);
+    free(opts.net_whitelist.list);
+    free(opts.port_whitelist.list);
     free(result.list);
     list_free(list);
 
