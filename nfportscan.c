@@ -71,7 +71,7 @@ static void print_help(FILE *output)
                     "  -a    --order-asceding   sort list ascending\n"
                     "  -d    --order-desceding  sort list descending\n"
                     "  -w    --whitelist-network    whitelist a network (in CIDR)\n"
-                    "  -p    --whitelist-port       whitelist a network (in CIDR)\n"
+                    "  -p    --whitelist-port       whitelist a port\n"
                     "                (whitelist options can be specified multiple times)\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
