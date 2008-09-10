@@ -39,6 +39,7 @@ typedef struct {
         SORT_HOSTS,
         SORT_FLOWS,
         SORT_IP,
+        SORT_PORT,
     } sort_field;
     enum {
         SORT_DESC,
@@ -66,6 +67,7 @@ static void print_help(FILE *output)
                     "  -H    --sort-hosts   sort by host destination count\n"
                     "  -f    --sort-flows   sort by flow count\n"
                     "  -i    --sort-ip      sort by host source ip\n"
+                    "  -P    --sort-port    sort by destination port\n"
                     "  -a    --order-asceding   sort list ascending\n"
                     "  -d    --order-desceding  sort list descending\n"
                     "  -w    --whitelist-network    whitelist a network (in CIDR)\n"
@@ -97,6 +99,13 @@ static int incident_compare(const void *a, const void *b) {
         if (ia->srcaddr < ib->srcaddr)
             return opts.sort_order == SORT_ASC ? -1 : 1;
         else if (ia->srcaddr > ib->srcaddr)
+            return opts.sort_order == SORT_ASC ? 1 : -1;
+        else
+            return 0;
+    } else if (opts.sort_field == SORT_PORT) {
+        if (ia->dstport < ib->dstport)
+            return opts.sort_order == SORT_ASC ? -1 : 1;
+        else if (ia->dstport > ib->dstport)
             return opts.sort_order == SORT_ASC ? 1 : -1;
         else
             return 0;
@@ -427,6 +436,7 @@ int main(int argc, char *argv[])
         {"sort-hosts", no_argument, 0, 'H'},
         {"sort-flows", no_argument, 0, 'f'},
         {"sort-ip", no_argument, 0, 'i'},
+        {"sort-port", no_argument, 0, 'P'},
         {"order-ascending", no_argument, 0, 'a'},
         {"order-descending", no_argument, 0, 'd'},
         {"whitelist-network", required_argument, 0, 'w'},
@@ -460,7 +470,7 @@ int main(int argc, char *argv[])
     }
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:Hfiadw:p:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:HfiPadw:p:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -474,6 +484,8 @@ int main(int argc, char *argv[])
             case 'f': opts.sort_field = SORT_FLOWS;
                       break;
             case 'i': opts.sort_field = SORT_IP;
+                      break;
+            case 'P': opts.sort_field = SORT_PORT;
                       break;
             case 'a': opts.sort_order = SORT_ASC;
                       break;
@@ -497,6 +509,8 @@ int main(int argc, char *argv[])
             case SORT_FLOWS: printf("flows ");
                              break;
             case SORT_IP: printf("source ip ");
+                             break;
+            case SORT_PORT: printf("destination port ");
                              break;
         }
 
