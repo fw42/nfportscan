@@ -62,7 +62,7 @@ static void print_help(FILE *output)
                     "  -f    --sort-flows   sort by flow count\n"
                     "  -i    --sort-ip      sort by host source ip\n"
                     "  -a    --order-asceding   sort list ascending\n"
-                    "  -a    --order-desceding  sort list descending\n"
+                    "  -d    --order-desceding  sort list descending\n"
                     "  -w    --whitelist-network    whitelist a network (in CIDR)\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
