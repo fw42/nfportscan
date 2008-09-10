@@ -1,4 +1,4 @@
-DEBUG = 1
+-include config.mk
 
 CFLAGS += -g -Wall -std=gnu99 -O2
 
