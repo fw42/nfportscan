@@ -121,16 +121,8 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     l->flows++;
 
     /* throw away everything except TCP or UDP IPv4 flows */
-    //if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
-    //       || mrec->flags & FLAG_IPV6_ADDR)
-    //   return 0;
-    //if ( mrec->prot != PROTO_TCP || mrec->flags & FLAG_IPV6_ADDR)
-    //    return 0;
     if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
                 || mrec->flags & FLAG_IPV6_ADDR)
-        return 0;
-
-    if ( mrec->dstport == 80 )
         return 0;
 
     /* count flows */
@@ -556,7 +548,6 @@ int main(int argc, char *argv[])
 
     for (unsigned int h = 0; h < HASH_SIZE; h++) {
         if (list->hashtable[h]->fill) {
-            // printf("hash %4x:\n", h);
             hashtable_entry_t *ht = list->hashtable[h];
             for (unsigned int i = 0; i < ht->fill; i++) {
                 if (ht->records[i]->fill > opts.threshhold &&
