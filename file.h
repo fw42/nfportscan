@@ -9,11 +9,7 @@
 #include <stdint.h>
 
 /* from common.h */
-#ifdef COMPILE_64BIT
-typedef uint64_t	pointer_addr_t;
-#else
-typedef uint32_t	pointer_addr_t;
-#endif
+typedef void* pointer_addr_t;
 
 
 /* from nffile.h */
