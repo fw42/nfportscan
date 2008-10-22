@@ -36,6 +36,9 @@
  *	
  */
 
+#ifndef _NFFILE_H
+#define _NFFILE_H
+
 #define IdentLen	128
 #define IdentNone	"none"
 
@@ -467,4 +470,4 @@ inline ssize_t Compat14_ReadRecords(int fd, void *buffer, data_block_header_t *f
 #endif
 
 
-
+#endif

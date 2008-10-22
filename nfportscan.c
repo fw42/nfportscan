@@ -38,6 +38,11 @@
 
 #include "file.h"
 #include "list.h"
+#include "nf_common.h"
+#include "rbtree.h"
+#include "nfdump.h"
+#include "nffile.h"
+#include "nftree.h"
 
 #define PROTO_TCP 6
 #define PROTO_UDP 17
@@ -78,6 +83,8 @@ typedef struct {
         unsigned int length;
         uint16_t *list;
     } port_whitelist;
+    char *filter;
+    FilterEngine_data_t *engine;
 } options_t;
 
 options_t opts;
@@ -96,6 +103,7 @@ static void print_help(FILE *output)
                     "  -w    --whitelist-network    whitelist a network (in CIDR)\n"
                     "  -p    --whitelist-port       whitelist a port\n"
                     "                (whitelist options can be specified multiple times)\n"
+                    "  -F    --filter       apply filter before counting\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
 }
@@ -147,6 +155,17 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
                 || mrec->flags & FLAG_IPV6_ADDR)
         return 0;
+
+    /* test, if either the master record matches the filter expression, or no
+     * filter has been given */
+    if ( opts.filter ) {
+        opts.engine->nfrecord = (uint64_t *)mrec;
+        if (opts.engine->FilterEngine(opts.engine) == 0) {
+            if (opts.verbose >= 4)
+                printf("flow record failed to pass filter\n");
+            return 0;
+        }
+    }
 
     /* count flows */
     l->incident_flows++;
@@ -456,12 +475,15 @@ int main(int argc, char *argv[])
         {"order-descending", no_argument, 0, 'd'},
         {"whitelist-network", required_argument, 0, 'w'},
         {"whitelist-port", required_argument, 0, 'p'},
+        {"filter", required_argument, 0, 'F'},
         { NULL, 0, 0, 0 }
     };
 
     /* initialize options */
     opts.verbose = 0;
     opts.threshhold = 100;
+    opts.filter = NULL;
+    opts.engine = NULL;
     opts.sort_field = SORT_HOSTS;
     opts.sort_order = SORT_DESC;
     opts.net_whitelist.fill = 0;
@@ -485,7 +507,7 @@ int main(int argc, char *argv[])
     }
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:HfiPadw:p:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:HfiPadw:p:F:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -509,6 +531,13 @@ int main(int argc, char *argv[])
             case 'w': add_whitelist_network(optarg);
                       break;
             case 'p': add_whitelist_port(optarg);
+                      break;
+            case 'F': opts.filter = optarg;
+                      opts.engine = CompileFilter(optarg);
+                      if (!opts.engine) {
+                          fprintf(stderr, "filter parse failed\n");
+                          exit(254);
+                      }
                       break;
             case '?': print_help(stderr);
                       exit(1);
