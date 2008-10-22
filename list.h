@@ -30,6 +30,7 @@
 typedef struct {
     uint32_t srcaddr;
     uint16_t dstport;
+    uint8_t protocol;
     unsigned int flows;
     unsigned int length;
     unsigned int fill;
@@ -58,7 +59,7 @@ typedef struct {
 incident_list_t *list_init(unsigned int initial_size, unsigned int increment);
 
 /* returns 0 on success, < 0 if error occured */
-int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint16_t dstaddr);
+int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint8_t protocol, uint16_t dstaddr);
 
 /* deallocate memory for a list */
 int list_free(incident_list_t *list);

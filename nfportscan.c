@@ -171,7 +171,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     l->incident_flows++;
 
     /* insert into list */
-    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->v4.dstaddr);
+    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->prot, mrec->v4.dstaddr);
 
     if (opts.verbose >= 4) {
         char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
@@ -184,7 +184,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
         inet_ntop(AF_INET, &mrec->v4.srcaddr, src, sizeof(src));
         inet_ntop(AF_INET, &mrec->v4.dstaddr, dst, sizeof(dst));
 
-        printf("incident flow: %s: %d -> %s: %d\n", src, mrec->srcport, dst, mrec->dstport);
+        printf("incident flow: (proto %u) %s: %d -> %s: %d\n", mrec->prot, src, mrec->srcport, dst, mrec->dstport);
     }
 
     return 1;
@@ -638,8 +638,17 @@ int main(int argc, char *argv[])
         /* make string from ip */
         inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
 
-        printf("  * %15s -> %5u : %10u dsthosts (%10u flows)\n",
+        char *protocol;
+        if (result.list[i].protocol == PROTO_UDP)
+            protocol = "UDP";
+        else if (result.list[i].protocol == PROTO_TCP)
+            protocol = "TCP";
+        else
+            protocol = "unknown";
+
+        printf("  * %15s -> %5u (%s): %10u dsthosts (%10u flows)\n",
                 src, result.list[i].dstport,
+                protocol,
                 result.list[i].fill, result.list[i].flows);
     }
 

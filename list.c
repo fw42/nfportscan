@@ -74,7 +74,7 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
     return list;
 }
 
-int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint16_t dstaddr)
+int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint8_t protocol, uint16_t dstaddr)
 {
     incident_list_t *l = *list;
 
@@ -89,7 +89,8 @@ int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint
     unsigned int incident_index;
     for (unsigned int i = 0; i < entry->fill; i++) {
         if (entry->records[i]->srcaddr == srcaddr &&
-            entry->records[i]->dstport == dstport) {
+            entry->records[i]->dstport == dstport &&
+            entry->records[i]->protocol == protocol) {
             incident = entry->records[i];
             incident_index = i;
             break;
@@ -169,6 +170,7 @@ int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint
         /* init values */
         record->srcaddr = srcaddr;
         record->dstport = dstport;
+        record->protocol = protocol;
         record->flows = 1;
         record->length = l->initial_size;
         record->fill = 1;
