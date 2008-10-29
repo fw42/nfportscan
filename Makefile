@@ -36,3 +36,11 @@ clean:
 	rm -f nfportscan *.o
 	rm -f y.output grammar.h grammar.c y.tab.c y.tab.h
 	rm -f scanner.c lex.yy.c
+
+.PHONY: snapshot
+
+snapshot:
+DESC=$(shell git describe)
+
+snapshot:
+	git archive --format=tar --prefix=nfportscan-$(DESC)/ HEAD | gzip > ../nfportscan-$(DESC).tar.gz
