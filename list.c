@@ -74,8 +74,14 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
     return list;
 }
 
-int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint8_t protocol, uint16_t dstaddr)
+int list_insert(incident_list_t **list, master_record_t *rec)
 {
+    uint32_t srcaddr = rec->v4.srcaddr;
+    uint16_t dstport = rec->dstport;
+    uint8_t protocol = rec->prot;
+    uint32_t dstaddr = rec->v4.dstaddr;
+    uint64_t packets = rec->dPkts;
+
     incident_list_t *l = *list;
 
     /* compute the hash value (== index in hashtable) */
@@ -101,6 +107,8 @@ int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint
         //printf("found (srcaddr,dstport) ");
 
         incident->flows++;
+
+        incident->packets += packets;
 
         /* if (srcaddr, dstport) is known, check if this dstaddr is also known */
         for (unsigned int i = 0; i < incident->fill; i++) {
@@ -172,6 +180,7 @@ int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint
         record->dstport = dstport;
         record->protocol = protocol;
         record->flows = 1;
+        record->packets = packets;
         record->length = l->initial_size;
         record->fill = 1;
         record->dstaddr[0] = dstaddr;

@@ -174,7 +174,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     l->incident_flows++;
 
     /* insert into list */
-    list_insert(list, mrec->v4.srcaddr, mrec->dstport, mrec->prot, mrec->v4.dstaddr);
+    list_insert(list, mrec);
 
     if (opts.verbose >= 4) {
         char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
@@ -642,11 +642,12 @@ int main(int argc, char *argv[])
         inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
 
         if (result.list[i].protocol == PROTO_ICMP) {
-            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%10u flows)\n",
+            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%10u flows, %10u packets)\n",
                     src,
                     (uint8_t)(result.list[i].dstport >> 8),
                     (uint8_t)result.list[i].dstport,
-                    result.list[i].fill, result.list[i].flows);
+                    result.list[i].fill, result.list[i].flows,
+                    result.list[i].packets);
         } else {
             char *protocol;
             if (result.list[i].protocol == PROTO_UDP)
@@ -656,10 +657,11 @@ int main(int argc, char *argv[])
             else
                 protocol = "unknown";
 
-            printf("  * %15s -> %5u (%s):             %10u dsthosts (%10u flows)\n",
+            printf("  * %15s -> %5u (%s):             %10u dsthosts (%10u flows, %10u packets)\n",
                     src, result.list[i].dstport,
                     protocol,
-                    result.list[i].fill, result.list[i].flows);
+                    result.list[i].fill, result.list[i].flows,
+                    result.list[i].packets);
         }
     }
 

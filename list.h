@@ -22,6 +22,7 @@
  }}} */
 
 #include <stdint.h>
+#include "nffile.h"
 
 #ifndef LIST_H
 #define LIST_H
@@ -32,6 +33,7 @@ typedef struct {
     uint16_t dstport;
     uint8_t protocol;
     unsigned int flows;
+    unsigned int packets;
     unsigned int length;
     unsigned int fill;
     uint32_t dstaddr[];
@@ -59,7 +61,7 @@ typedef struct {
 incident_list_t *list_init(unsigned int initial_size, unsigned int increment);
 
 /* returns 0 on success, < 0 if error occured */
-int list_insert(incident_list_t **list, uint32_t srcaddr, uint16_t dstport, uint8_t protocol, uint16_t dstaddr);
+int list_insert(incident_list_t **list, master_record_t *rec);
 
 /* deallocate memory for a list */
 int list_free(incident_list_t *list);
