@@ -596,7 +596,7 @@ int main(int argc, char *argv[])
     result.list = malloc(SORT_LIST_INITIAL * sizeof(incident_record_t));
 
     if (result.list == NULL) {
-        fprintf(stderr, "unable to allocate %d byte of memory for sorted list\n", 
+        fprintf(stderr, "unable to allocate %d byte of memory for sorted list\n",
                 result.length * sizeof(incident_record_t));
         exit(3);
     }
@@ -641,20 +641,26 @@ int main(int argc, char *argv[])
         /* make string from ip */
         inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
 
-        char *protocol;
-        if (result.list[i].protocol == PROTO_UDP)
-            protocol = "UDP";
-        else if (result.list[i].protocol == PROTO_TCP)
-            protocol = "TCP";
-        else if (result.list[i].protocol == PROTO_ICMP)
-            protocol = "ICMP";
-        else
-            protocol = "unknown";
+        if (result.list[i].protocol == PROTO_ICMP) {
+            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%10u flows)\n",
+                    src,
+                    (uint8_t)(result.list[i].dstport >> 8),
+                    (uint8_t)result.list[i].dstport,
+                    result.list[i].fill, result.list[i].flows);
+        } else {
+            char *protocol;
+            if (result.list[i].protocol == PROTO_UDP)
+                protocol = "UDP";
+            else if (result.list[i].protocol == PROTO_TCP)
+                protocol = "TCP";
+            else
+                protocol = "unknown";
 
-        printf("  * %15s -> %5u (%s): %10u dsthosts (%10u flows)\n",
-                src, result.list[i].dstport,
-                protocol,
-                result.list[i].fill, result.list[i].flows);
+            printf("  * %15s -> %5u (%s):             %10u dsthosts (%10u flows)\n",
+                    src, result.list[i].dstport,
+                    protocol,
+                    result.list[i].fill, result.list[i].flows);
+        }
     }
 
     free(opts.net_whitelist.list);
