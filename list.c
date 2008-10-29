@@ -81,6 +81,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
     uint8_t protocol = rec->prot;
     uint32_t dstaddr = rec->v4.dstaddr;
     uint64_t packets = rec->dPkts;
+    uint64_t octets = rec->dOctets;
 
     incident_list_t *l = *list;
 
@@ -107,8 +108,8 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         //printf("found (srcaddr,dstport) ");
 
         incident->flows++;
-
         incident->packets += packets;
+        incident->octets += octets;
 
         /* if (srcaddr, dstport) is known, check if this dstaddr is also known */
         for (unsigned int i = 0; i < incident->fill; i++) {
@@ -181,6 +182,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         record->protocol = protocol;
         record->flows = 1;
         record->packets = packets;
+        record->octets = octets;
         record->length = l->initial_size;
         record->fill = 1;
         record->dstaddr[0] = dstaddr;

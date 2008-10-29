@@ -33,7 +33,8 @@ typedef struct {
     uint16_t dstport;
     uint8_t protocol;
     unsigned int flows;
-    unsigned int packets;
+    uint64_t packets;
+    uint64_t octets;
     unsigned int length;
     unsigned int fill;
     uint32_t dstaddr[];

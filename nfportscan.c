@@ -642,12 +642,12 @@ int main(int argc, char *argv[])
         inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
 
         if (result.list[i].protocol == PROTO_ICMP) {
-            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%10u flows, %10u packets)\n",
+            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
                     src,
                     (uint8_t)(result.list[i].dstport >> 8),
                     (uint8_t)result.list[i].dstport,
                     result.list[i].fill, result.list[i].flows,
-                    result.list[i].packets);
+                    result.list[i].packets, result.list[i].octets);
         } else {
             char *protocol;
             if (result.list[i].protocol == PROTO_UDP)
@@ -657,11 +657,11 @@ int main(int argc, char *argv[])
             else
                 protocol = "unknown";
 
-            printf("  * %15s -> %5u (%s):             %10u dsthosts (%10u flows, %10u packets)\n",
+            printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
                     src, result.list[i].dstport,
                     protocol,
                     result.list[i].fill, result.list[i].flows,
-                    result.list[i].packets);
+                    result.list[i].packets, result.list[i].octets);
         }
     }
 
