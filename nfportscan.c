@@ -44,6 +44,7 @@
 #include "nffile.h"
 #include "nftree.h"
 
+#define PROTO_ICMP 1
 #define PROTO_TCP 6
 #define PROTO_UDP 17
 #define IPV4_ADDR_STR_LEN_MAX 20
@@ -151,9 +152,11 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     /* count global flows */
     l->flows++;
 
-    /* throw away everything except TCP or UDP IPv4 flows */
-    if ( (mrec->prot != PROTO_TCP && mrec->prot != PROTO_UDP)
-                || mrec->flags & FLAG_IPV6_ADDR)
+    /* throw away everything except TCP, UDP and ICMP IPv4 flows */
+    if ( (mrec->prot != PROTO_TCP
+                && mrec->prot != PROTO_UDP
+                && mrec->prot != PROTO_ICMP)
+            || mrec->flags & FLAG_IPV6_ADDR)
         return 0;
 
     /* test, if either the master record matches the filter expression, or no
@@ -643,6 +646,8 @@ int main(int argc, char *argv[])
             protocol = "UDP";
         else if (result.list[i].protocol == PROTO_TCP)
             protocol = "TCP";
+        else if (result.list[i].protocol == PROTO_ICMP)
+            protocol = "ICMP";
         else
             protocol = "unknown";
 
