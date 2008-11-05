@@ -76,6 +76,10 @@ typedef struct {
     } sort_order;
     char *filter;
     FilterEngine_data_t *engine;
+    enum {
+        NORMAL,
+        CSV,
+    } output;
 } options_t;
 
 options_t opts;
@@ -92,6 +96,7 @@ static void print_help(FILE *output)
                     "  -a    --order-asceding   sort list ascending\n"
                     "  -d    --order-desceding  sort list descending\n"
                     "  -F    --filter       apply filter before counting\n"
+                    "  -c    --csv          output data separated by TAB and NEWLINE\n"
                     "  -v    --verbose      set verbosity level\n"
                     "  -h    --help         print this help\n");
 }
@@ -337,6 +342,7 @@ int main(int argc, char *argv[])
         {"order-ascending", no_argument, 0, 'a'},
         {"order-descending", no_argument, 0, 'd'},
         {"filter", required_argument, 0, 'F'},
+        {"csv", no_argument, 0, 'c'},
         { NULL, 0, 0, 0 }
     };
 
@@ -347,9 +353,10 @@ int main(int argc, char *argv[])
     opts.engine = NULL;
     opts.sort_field = SORT_HOSTS;
     opts.sort_order = SORT_DESC;
+    opts.output = NORMAL;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:HfiPadw:p:F:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvt:HfiPadF:c", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -376,6 +383,8 @@ int main(int argc, char *argv[])
                           fprintf(stderr, "filter parse failed\n");
                           exit(254);
                       }
+                      break;
+            case 'c': opts.output = CSV;
                       break;
             case '?': print_help(stderr);
                       exit(1);
@@ -466,6 +475,9 @@ int main(int argc, char *argv[])
 
     qsort(&result.list[0], result.fill, sizeof(incident_record_t), incident_compare);
 
+    if (opts.output == CSV)
+        printf("source ip\tport\tproto\thosts\tflows\tpackets\toctets\n");
+
     for (unsigned int i = 0; i < result.fill; i++) {
         char src[IPV4_ADDR_STR_LEN_MAX];
 
@@ -474,27 +486,35 @@ int main(int argc, char *argv[])
         /* make string from ip */
         inet_ntop(AF_INET, &result.list[i].srcaddr, src, sizeof(src));
 
-        if (result.list[i].protocol == PROTO_ICMP) {
-            printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
-                    src,
-                    (uint8_t)(result.list[i].dstport >> 8),
-                    (uint8_t)result.list[i].dstport,
-                    result.list[i].fill, result.list[i].flows,
-                    result.list[i].packets, result.list[i].octets);
-        } else {
-            char *protocol;
-            if (result.list[i].protocol == PROTO_UDP)
-                protocol = "UDP";
-            else if (result.list[i].protocol == PROTO_TCP)
-                protocol = "TCP";
-            else
-                protocol = "unknown";
+        char *protocol;
+        if (result.list[i].protocol == PROTO_UDP)
+            protocol = "UDP";
+        else if (result.list[i].protocol == PROTO_TCP)
+            protocol = "TCP";
 
-            printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
+        if (opts.output == NORMAL) {
+            if (result.list[i].protocol == PROTO_ICMP) {
+                printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
+                        src,
+                        (uint8_t)(result.list[i].dstport >> 8),
+                        (uint8_t)result.list[i].dstport,
+                        result.list[i].fill, result.list[i].flows,
+                        result.list[i].packets, result.list[i].octets);
+            } else {
+                printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
+                        src, result.list[i].dstport,
+                        protocol,
+                        result.list[i].fill, result.list[i].flows,
+                        result.list[i].packets, result.list[i].octets);
+            }
+        } else { /* opts.output == CSV */
+            printf("%s\t%u\t%s\t"
+                    "%u\t%u\t%llu\t%llu\n",
                     src, result.list[i].dstport,
                     protocol,
                     result.list[i].fill, result.list[i].flows,
                     result.list[i].packets, result.list[i].octets);
+
         }
     }
 
