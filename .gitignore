@@ -4,3 +4,6 @@
 /grammar.c
 /grammar.h
 /scanner.c
+/y.output
+/config.mk
+tags
