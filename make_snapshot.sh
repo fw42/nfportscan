@@ -6,6 +6,7 @@ DESTDIR="/tmp"
 
 git archive --format=tar "--prefix=nfportscan-$DESC/" HEAD | (cd "$TEMPDIR" && tar x)
 (cd "$TEMPDIR/nfportscan-$DESC" && \
+    rm make_snapshot.sh && \
     test -e version.h || \
     echo "#define VERSION \"$DESC\"" > version.h)
 (cd "$TEMPDIR" && \
