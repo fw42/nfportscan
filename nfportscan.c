@@ -44,6 +44,11 @@
 #include "nffile.h"
 #include "nftree.h"
 
+#include "version.h"
+#ifndef VERSION
+#define VERSION "(unknown, compiled from git)"
+#endif
+
 #define PROTO_ICMP 1
 #define PROTO_TCP 6
 #define PROTO_UDP 17
@@ -98,6 +103,7 @@ static void print_help(FILE *output)
                     "  -F    --filter       apply filter before counting\n"
                     "  -c    --csv          output data separated by TAB and NEWLINE\n"
                     "  -v    --verbose      set verbosity level\n"
+                    "  -V    --version      print program version\n"
                     "  -h    --help         print this help\n");
 }
 
@@ -343,6 +349,7 @@ int main(int argc, char *argv[])
         {"order-descending", no_argument, 0, 'd'},
         {"filter", required_argument, 0, 'F'},
         {"csv", no_argument, 0, 'c'},
+        {"version", no_argument, 0, 'V'},
         { NULL, 0, 0, 0 }
     };
 
@@ -356,7 +363,7 @@ int main(int argc, char *argv[])
     opts.output = NORMAL;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvt:HfiPadF:c", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvVt:HfiPadF:c", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -385,6 +392,9 @@ int main(int argc, char *argv[])
                       }
                       break;
             case 'c': opts.output = CSV;
+                      break;
+            case 'V': printf("nfportscan " VERSION ", compiled at " __DATE__ " " __TIME__ "\n");
+                      exit(0);
                       break;
             case '?': print_help(stderr);
                       exit(1);

@@ -7,3 +7,4 @@
 /y.output
 /config.mk
 tags
+/version.h

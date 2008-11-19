@@ -17,7 +17,10 @@ endif
 
 all: nfportscan
 
-nfportscan: file.o list.o nftree.o grammar.o scanner.o util.o ipconv.o nf_common.o
+nfportscan: file.o list.o nftree.o grammar.o scanner.o util.o ipconv.o nf_common.o version.h
+
+version.h:
+	@echo "#define VERSION \"$(shell git describe)\"" > version.h
 
 nftree.o: grammar.c grammar.h
 
@@ -36,11 +39,4 @@ clean:
 	rm -f nfportscan *.o
 	rm -f y.output grammar.h grammar.c y.tab.c y.tab.h
 	rm -f scanner.c lex.yy.c
-
-.PHONY: snapshot
-
-snapshot:
-DESC=$(shell git describe)
-
-snapshot:
-	git archive --format=tar --prefix=nfportscan-$(DESC)/ HEAD | gzip > ../nfportscan-$(DESC).tar.gz
+	rm -f version.h
