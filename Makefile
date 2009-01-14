@@ -13,7 +13,7 @@ ifeq ($(DEBUG),1)
 	CFLAGS += -DDEBUG
 endif
 
-.PHONY: all clean
+.PHONY: all clean install
 
 all: nfportscan
 
@@ -40,3 +40,6 @@ clean:
 	rm -f y.output grammar.h grammar.c y.tab.c y.tab.h
 	rm -f scanner.c lex.yy.c
 	rm -f version.h
+
+install: nfportscan
+	install -m 755 -s nfportscan /usr/local/bin/
