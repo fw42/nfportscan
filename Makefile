@@ -39,7 +39,6 @@ clean:
 	rm -f nfportscan *.o
 	rm -f y.output grammar.h grammar.c y.tab.c y.tab.h
 	rm -f scanner.c lex.yy.c
-	rm -f version.h
 
 install: nfportscan
 	install -m 755 -s nfportscan /usr/local/bin/
