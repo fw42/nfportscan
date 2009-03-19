@@ -3,6 +3,7 @@
  *              from cisco netflow data files
  *
  * (c) by Alexander Neumann <alexander@bumpern.de>
+ *        Florian Weingarten <weingarten@rz.rwth-aachen.de>
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
@@ -41,6 +42,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/queue.h>
+#include <time.h>
 
 #include "file.h"
 #include "list.h"
@@ -74,6 +76,7 @@ typedef struct {
 /* global options */
 typedef struct {
     unsigned int verbose;
+    unsigned int showfirstlast;
     unsigned int threshhold;
     enum {
         SORT_HOSTS,
@@ -100,6 +103,7 @@ static void print_help(FILE *output)
     fprintf(output, "USAGE: nfportscan [OPTIONS] FILE [FILE] ...\n"
                     "  -t    --threshhold   set dsthost minimum for an ip address to be reported\n"
                     "                       (default: 100)\n"
+                    "  -T    --firstlast    show timestamps of first and last sights of flow\n"
                     "  -H    --sort-hosts   sort by host destination count\n"
                     "  -f    --sort-flows   sort by flow count\n"
                     "  -i    --sort-ip      sort by host source ip\n"
@@ -347,6 +351,7 @@ int main(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"verbose", no_argument, 0, 'v'},
         {"threshhold", required_argument, 0, 't'},
+	{"firstlast", no_argument, 0, 'T'},
         {"sort-hosts", no_argument, 0, 'H'},
         {"sort-flows", no_argument, 0, 'f'},
         {"sort-ip", no_argument, 0, 'i'},
@@ -369,12 +374,14 @@ int main(int argc, char *argv[])
     opts.output = NORMAL;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvVt:HfiPadF:c", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvVTt:HfiPadF:c", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
                       break;
             case 'v': opts.verbose++;
+                      break;
+            case 'T': opts.showfirstlast = 1;
                       break;
             case 't': opts.threshhold = atoi(optarg);
                       break;
@@ -507,22 +514,37 @@ int main(int argc, char *argv[])
             protocol = "UDP";
         else if (result.list[i].protocol == PROTO_TCP)
             protocol = "TCP";
+	else
+	    protocol = "";
 
         if (opts.output == NORMAL) {
+
+            char buf_first[100], buf_last[100];
+	    strftime(buf_first, 100, "%d.%m.%y-%H:%M:%S", localtime((time_t*)&(result.list[i].first)));
+	    strftime(buf_last,  100, "%d.%m.%y-%H:%M:%S", localtime((time_t*)&(result.list[i].last) ));
+
             if (result.list[i].protocol == PROTO_ICMP) {
-                printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
+                printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %9llu octets)",
                         src,
                         (uint8_t)(result.list[i].dstport >> 8),
                         (uint8_t)result.list[i].dstport,
                         result.list[i].fill, result.list[i].flows,
-                        result.list[i].packets, result.list[i].octets);
+                        result.list[i].packets, result.list[i].octets
+		);
             } else {
-                printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %5llu octets)\n",
+                printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %9llu octets)",
                         src, result.list[i].dstport,
                         protocol,
                         result.list[i].fill, result.list[i].flows,
-                        result.list[i].packets, result.list[i].octets);
+                        result.list[i].packets, result.list[i].octets
+		);
             }
+
+            if(opts.showfirstlast) {
+		printf(" (%s, %s)", buf_first, buf_last);
+            }
+            puts("");
+
         } else { /* opts.output == CSV */
             printf("%s\t%u\t%s\t"
                     "%u\t%u\t%llu\t%llu\n",

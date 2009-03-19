@@ -3,6 +3,7 @@
  *              from cisco netflow data files
  *
  * (c) by Alexander Neumann <alexander@bumpern.de>
+ *        Florian Weingarten <weingarten@rz.rwth-aachen.de>
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
@@ -40,6 +41,8 @@ typedef struct {
     unsigned int flows;
     uint64_t packets;
     uint64_t octets;
+    uint32_t first;
+    uint32_t last;
     unsigned int length;
     unsigned int fill;
     uint32_t dstaddr[];
