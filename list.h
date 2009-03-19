@@ -3,6 +3,7 @@
  *              from cisco netflow data files
  *
  * (c) by Alexander Neumann <alexander@bumpern.de>
+ *        Florian Weingarten <weingarten@rz.rwth-aachen.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -35,6 +36,8 @@ typedef struct {
     unsigned int flows;
     uint64_t packets;
     uint64_t octets;
+    uint32_t first;
+    uint32_t last;
     unsigned int length;
     unsigned int fill;
     uint32_t dstaddr[];

@@ -3,6 +3,7 @@
  *              from cisco netflow data files
  *
  * (c) by Alexander Neumann <alexander@bumpern.de>
+ *        Florian Weingarten <weingarten@rz.rwth-aachen.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,6 +26,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "list.h"
+
+#include <time.h>
 
 static uint16_t list_hash(uint32_t srcaddr, uint16_t dstport)
 {
@@ -111,6 +114,10 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         incident->packets += packets;
         incident->octets += octets;
 
+	// update timestamp of first and last sight
+	incident->first = (incident->first > rec->first) ? rec->first : incident->first;
+	incident->last  = (incident->last  < rec->last ) ? rec->last  : incident->last;
+
         /* if (srcaddr, dstport) is known, check if this dstaddr is also known */
         for (unsigned int i = 0; i < incident->fill; i++) {
             if (incident->dstaddr[i] == dstaddr) {
@@ -183,6 +190,8 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         record->flows = 1;
         record->packets = packets;
         record->octets = octets;
+	record->first = rec->first;
+	record->last = rec->last;
         record->length = l->initial_size;
         record->fill = 1;
         record->dstaddr[0] = dstaddr;
