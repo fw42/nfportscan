@@ -57,6 +57,8 @@
 #define VERSION "(unknown, compiled from git)"
 #endif
 
+#define DEFAULT_TIMEFORMAT "%d.%m.%y %H:%M:%S"
+
 #define PROTO_ICMP 1
 #define PROTO_TCP 6
 #define PROTO_UDP 17
@@ -77,12 +79,16 @@ typedef struct {
 typedef struct {
     unsigned int verbose;
     unsigned int showfirstlast;
+	unsigned int lastduration;
     unsigned int threshhold;
+	char *timeformat;
     enum {
         SORT_HOSTS,
         SORT_FLOWS,
         SORT_IP,
         SORT_PORT,
+		SORT_FIRST,
+		SORT_DUR
     } sort_field;
     enum {
         SORT_DESC,
@@ -101,20 +107,28 @@ options_t opts;
 static void print_help(FILE *output)
 {
     fprintf(output, "USAGE: nfportscan [OPTIONS] FILE [FILE] ...\n"
-                    "  -t    --threshhold   set dsthost minimum for an ip address to be reported\n"
-                    "                       (default: 100)\n"
-                    "  -T    --firstlast    show timestamps of first and last sights of flow\n"
-                    "  -H    --sort-hosts   sort by host destination count\n"
-                    "  -f    --sort-flows   sort by flow count\n"
-                    "  -i    --sort-ip      sort by host source ip\n"
-                    "  -P    --sort-port    sort by destination port\n"
-                    "  -a    --order-asceding   sort list ascending\n"
-                    "  -d    --order-desceding  sort list descending\n"
-                    "  -F    --filter       apply filter before counting\n"
-                    "  -c    --csv          output data separated by TAB and NEWLINE\n"
-                    "  -v    --verbose      set verbosity level\n"
-                    "  -V    --version      print program version\n"
-                    "  -h    --help         print this help\n");
+                    "  -t  --threshhold       set dsthost minimum for an ip address to be reported\n"
+                    "                         (default: 100)\n"
+                    "  -T  --firstlast        show timestamps of first and last sights of flow\n"
+					"  -s  --timeformat       overwrite time string format\n"
+					"                         (default: \"%s\", strftime() syntax)\n"
+					"  -D  --lastduration     show duration instead of last timestamp\n"
+					"                         (in combination with -T)\n"
+                    "  -H  --sort-hosts       sort by host destination count\n"
+                    "  -f  --sort-flows       sort by flow count\n"
+                    "  -i  --sort-ip          sort by host source ip\n"
+                    "  -P  --sort-port        sort by destination port\n"
+					"  -b  --sort-first       sort by timestamp of first sight\n"
+					"  -e  --sort-duration    sort by duration between first and last sight\n"
+                    "  -a  --order-asceding   sort list ascending\n"
+                    "  -d  --order-desceding  sort list descending\n"
+                    "  -F  --filter           apply filter before counting\n"
+                    "  -c  --csv              output data separated by TAB and NEWLINE\n"
+                    "  -v  --verbose          set verbosity level\n"
+                    "  -V  --version          print program version\n"
+                    "  -h  --help             print this help\n",
+			DEFAULT_TIMEFORMAT
+	);
 }
 
 static int incident_compare(const void *a, const void *b) {
@@ -149,7 +163,21 @@ static int incident_compare(const void *a, const void *b) {
             return opts.sort_order == SORT_ASC ? 1 : -1;
         else
             return 0;
-    }
+    } else if (opts.sort_field == SORT_DUR) {
+		if ((ia->last - ia->first) < (ib->last - ib->first))
+			return opts.sort_order == SORT_ASC ? -1 : 1;
+		else if ((ia->last - ia->first) > (ib->last - ib->first))
+			return opts.sort_order == SORT_ASC ? 1 : -1;
+		else
+			return 0;
+	} else if (opts.sort_field == SORT_FIRST) {
+		if (ia->first < ib->first)
+			return opts.sort_order == SORT_ASC ? -1 : 1;
+		else if (ia->first > ib->first)
+			return opts.sort_order == SORT_ASC ? 1 : -1;
+		else
+			return 0;
+	}
 
     return 0;
 }
@@ -351,11 +379,15 @@ int main(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"verbose", no_argument, 0, 'v'},
         {"threshhold", required_argument, 0, 't'},
-	{"firstlast", no_argument, 0, 'T'},
+		{"firstlast", no_argument, 0, 'T'},
+		{"timeformat", required_argument, 0, 's'},
+		{"lastduration", no_argument, 0, 'D'},
         {"sort-hosts", no_argument, 0, 'H'},
         {"sort-flows", no_argument, 0, 'f'},
         {"sort-ip", no_argument, 0, 'i'},
         {"sort-port", no_argument, 0, 'P'},
+		{"sort-duration", no_argument, 0, 'e'},
+		{"sort-first", no_argument, 0, 'b'},
         {"order-ascending", no_argument, 0, 'a'},
         {"order-descending", no_argument, 0, 'd'},
         {"filter", required_argument, 0, 'F'},
@@ -372,9 +404,10 @@ int main(int argc, char *argv[])
     opts.sort_field = SORT_HOSTS;
     opts.sort_order = SORT_DESC;
     opts.output = NORMAL;
+	opts.timeformat = DEFAULT_TIMEFORMAT;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvVTt:HfiPadF:c", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvVbTDet:HfiPadF:cs:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -385,6 +418,11 @@ int main(int argc, char *argv[])
                       break;
             case 't': opts.threshhold = atoi(optarg);
                       break;
+			case 's': opts.timeformat = malloc(strlen(optarg));
+					  strcpy(opts.timeformat, optarg);
+					  break;
+			case 'D': opts.lastduration = 1;
+					  break;
             case 'H': opts.sort_field = SORT_HOSTS;
                       break;
             case 'f': opts.sort_field = SORT_FLOWS;
@@ -393,6 +431,10 @@ int main(int argc, char *argv[])
                       break;
             case 'P': opts.sort_field = SORT_PORT;
                       break;
+			case 'e': opts.sort_field = SORT_DUR;
+					  break;
+			case 'b': opts.sort_field = SORT_FIRST;
+					  break;
             case 'a': opts.sort_order = SORT_ASC;
                       break;
             case 'd': opts.sort_order = SORT_DESC;
@@ -426,6 +468,10 @@ int main(int argc, char *argv[])
                              break;
             case SORT_PORT: printf("destination port ");
                              break;
+			case SORT_DUR: printf("duration");
+							 break;
+			case SORT_FIRST: printf("first sight");
+							 break;
         }
 
         switch (opts.sort_order) {
@@ -499,7 +545,7 @@ int main(int argc, char *argv[])
     qsort(&result.list[0], result.fill, sizeof(incident_record_t), incident_compare);
 
     if (opts.output == CSV)
-        printf("source ip\tport\tproto\thosts\tflows\tpackets\toctets\n");
+        printf("source ip\tport\tproto\thosts\tflows\tpackets\toctets\tfirst\tlast\n");
 
     for (unsigned int i = 0; i < result.fill; i++) {
         char src[IPV4_ADDR_STR_LEN_MAX];
@@ -520,11 +566,16 @@ int main(int argc, char *argv[])
         if (opts.output == NORMAL) {
 
             char buf_first[100], buf_last[100];
-	    strftime(buf_first, 100, "%d.%m.%y-%H:%M:%S", localtime((time_t*)&(result.list[i].first)));
-	    strftime(buf_last,  100, "%d.%m.%y-%H:%M:%S", localtime((time_t*)&(result.list[i].last) ));
+		    strftime(buf_first, 100, opts.timeformat, localtime((time_t*)&(result.list[i].first)));
+
+			if(opts.lastduration) {
+				snprintf(buf_last,  100, "%02d min %02d sec", (result.list[i].last - result.list[i].first) / 60, (result.list[i].last - result.list[i].first) % 60);
+			} else {
+				strftime(buf_last,  100, opts.timeformat, localtime((time_t*)&(result.list[i].last) ));
+			}
 
             if (result.list[i].protocol == PROTO_ICMP) {
-                printf("  * %15s -> type %2u, code %2u (ICMP): %10u dsthosts (%5u flows, %5llu packets, %9llu octets)",
+                printf("  * %15s -> %2u/%2u (ICMP): %10u dsts (%7u flows, %7llu pckts, %9llu octs)",
                         src,
                         (uint8_t)(result.list[i].dstport >> 8),
                         (uint8_t)result.list[i].dstport,
@@ -532,7 +583,7 @@ int main(int argc, char *argv[])
                         result.list[i].packets, result.list[i].octets
 		);
             } else {
-                printf("  * %15s -> %5u (%s):             %10u dsthosts (%5u flows, %5llu packets, %9llu octets)",
+                printf("  * %15s -> %6u (%s): %10u dsts (%7u flows, %7llu pckts, %9llu octs)",
                         src, result.list[i].dstport,
                         protocol,
                         result.list[i].fill, result.list[i].flows,
@@ -541,17 +592,19 @@ int main(int argc, char *argv[])
             }
 
             if(opts.showfirstlast) {
-		printf(" (%s, %s)", buf_first, buf_last);
+				printf("  (%s, %s)", buf_first, buf_last);
             }
             puts("");
 
         } else { /* opts.output == CSV */
             printf("%s\t%u\t%s\t"
-                    "%u\t%u\t%llu\t%llu\n",
+                    "%u\t%u\t%llu\t%llu\t%u\t%u\n",
                     src, result.list[i].dstport,
                     protocol,
                     result.list[i].fill, result.list[i].flows,
-                    result.list[i].packets, result.list[i].octets);
+                    result.list[i].packets, result.list[i].octets,
+					result.list[i].first, result.list[i].last
+			);
 
         }
     }
