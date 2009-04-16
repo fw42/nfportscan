@@ -1,3 +1,9 @@
+# nfportscan Makefile
+# 
+#  Alexander Neumann <alexander@bumpern.de>
+#  Florian Weingarten <weingarten@rz.rwth-aachen.de>
+#
+
 -include config.mk
 
 CFLAGS += -g -Wall -std=gnu99 -O2 -fopenmp

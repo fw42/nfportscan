@@ -30,10 +30,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <time.h>
 #include <omp.h>
 #include "list.h"
 
-#include <time.h>
 
 // One OpenMP lock for every hashtable entry
 omp_lock_t locks[HASH_SIZE];
@@ -52,8 +53,8 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
             HASH_SIZE * sizeof(hashtable_entry_t *));
 
     if (list == NULL) {
-        fprintf(stderr, "unable to allocate %d byte of memory for list\n",
-                sizeof(incident_list_t) + HASH_SIZE * sizeof(hashtable_entry_t *));
+        fprintf(stderr, "unable to allocate %d byte of memory for list (malloc(): %s)\n",
+                sizeof(incident_list_t) + HASH_SIZE * sizeof(hashtable_entry_t *), strerror(errno));
         exit(3);
     }
 
@@ -68,8 +69,8 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
                                 initial_size * sizeof(incident_record_t *));
 
         if (entry == NULL) {
-            fprintf(stderr, "unable to allocate %d byte of memory for hashtable entry\n",
-                    sizeof(incident_list_t) + HASH_SIZE * sizeof(hashtable_entry_t *));
+            fprintf(stderr, "unable to allocate %d byte of memory for hashtable entry (malloc(): %s)\n",
+                    sizeof(hashtable_entry_t) + initial_size * sizeof(incident_record_t*), strerror(errno));
             exit(3);
         }
 
@@ -143,12 +144,21 @@ int list_insert(incident_list_t **list, master_record_t *rec)
 
             /* allocate more memory */
             incident->length += l->increment;
+
+            // Save length, in case realloc returns NULL (and overwrites our pointer)
+            unsigned int tmplen = incident->length;
+
             incident = realloc(incident, sizeof(incident_record_t) +
                      incident->length * sizeof(uint32_t));
 
             if (incident == NULL) {
-                fprintf(stderr, "unable to allocate %d byte of memory for incident\n",
-                    sizeof(incident_record_t) + incident->length * sizeof(uint32_t));
+                fprintf(stderr, "unable to allocate %d byte of memory for incident (malloc(): %s)\n",
+                    sizeof(incident_record_t) + tmplen * sizeof(uint32_t), strerror(errno));
+
+                if(errno == ENOMEM) {
+                    return -1;
+                }
+
                 exit(3);
             }
 
@@ -167,15 +177,22 @@ int list_insert(incident_list_t **list, master_record_t *rec)
             /* increase memory */
             entry->length += l->increment;
 
+            // Save length, in case realloc fails and returns NULL
+            unsigned int tmplen = entry->length;
+
             entry = realloc(entry, sizeof(hashtable_entry_t) +
                      entry->length * sizeof(incident_record_t *));
 
             if (entry == NULL) {
-                fprintf(stderr, "unable to allocate %d byte of memory for hashtable entry\n",
-                      sizeof(hashtable_entry_t) + entry->length * sizeof(incident_record_t *));
+                fprintf(stderr, "unable to allocate %d byte of memory for hashtable entry (malloc(): %s)\n",
+                      sizeof(hashtable_entry_t) + tmplen * sizeof(incident_record_t *), strerror(errno));
+
+                if(errno == ENOMEM) {
+                    return -1;
+                }
+
                 exit(3);
             }
-
 
             /* store (potentially) new pointer */
             l->hashtable[hash] = entry;
@@ -186,8 +203,13 @@ int list_insert(incident_list_t **list, master_record_t *rec)
                                            l->initial_size * sizeof(uint32_t));
 
         if (record == NULL) {
-            fprintf(stderr, "unable to allocate %d byte of memory for entry record\n",
-                    sizeof(incident_record_t) + l->initial_size * sizeof(uint32_t));
+            fprintf(stderr, "unable to allocate %d byte of memory for entry record (malloc(): %s)\n",
+                    sizeof(incident_record_t) + l->initial_size * sizeof(uint32_t), strerror(errno));
+
+            if(errno == ENOMEM) {
+                return -1;
+            }
+
             exit(3);
         }
 

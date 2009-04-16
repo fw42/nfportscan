@@ -217,7 +217,9 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     l->incident_flows++;
 
     /* insert into list */
-    list_insert(list, mrec);
+    if(list_insert(list, mrec) == -1) {
+        return -1;
+    }
 
     if (opts.verbose >= 4) {
         char src[IPV4_ADDR_STR_LEN_MAX], dst[IPV4_ADDR_STR_LEN_MAX];
@@ -344,7 +346,12 @@ static int process_file(char *file, incident_list_t **list)
         void *buf = malloc(bheader.size);
 
         if (buf == NULL) {
-            fprintf(stderr, "unable to allocate %d byte of memory\n", bheader.size);
+            fprintf(stderr, "unable to allocate %d byte of memory (malloc(): %s)\n", bheader.size, strerror(errno));
+            
+            if(errno == ENOMEM) {
+                return -1;
+            }
+
             exit(3);
         }
 
@@ -371,7 +378,11 @@ static int process_file(char *file, incident_list_t **list)
             /* advance pointer */
             c = (common_record_t *)((pointer_addr_t)c + c->size);
 
-            process_flow(&mrec, list);
+            if(process_flow(&mrec, list) == -1) {
+                free(buf);
+                close(fd);
+                return -1;
+            }
         }
 
         free(buf);
@@ -514,10 +525,13 @@ int main(int argc, char *argv[])
     while(argv[optind++] != NULL) num_files++;
 
     // Read files, each file in a seperate thread
+    int errors = 0;
     int i;
     #pragma omp parallel for
     for(i=0; i<num_files; i++) {
-        process_file(argv[optind_tmp + i], &list);
+        if(process_file(argv[optind_tmp + i], &list) != 0) {
+            errors++;
+        }
     }
 
     if (opts.verbose)
@@ -536,8 +550,8 @@ int main(int argc, char *argv[])
     result.list = malloc(SORT_LIST_INITIAL * sizeof(incident_record_t));
 
     if (result.list == NULL) {
-        fprintf(stderr, "unable to allocate %d byte of memory for sorted list\n",
-                result.length * sizeof(incident_record_t));
+        fprintf(stderr, "unable to allocate %d byte of memory for sorted list (malloc(): %s)\n",
+                result.length * sizeof(incident_record_t), strerror(errno));
         exit(3);
     }
 
@@ -634,6 +648,10 @@ int main(int argc, char *argv[])
 			);
 
         }
+    }
+
+    if(errors) {
+        fprintf(stderr, "\nWARNING: There were errors in %d files. Is it possible that not all files have been analyzed correctly.\n\n", errors);
     }
 
     free(result.list);

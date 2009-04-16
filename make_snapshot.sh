@@ -1,5 +1,11 @@
 #!/bin/sh
 
+#
+# snapshot script
+#
+#  Alexander Neumann <alexander@bumpern.de>
+#
+
 DESC=$(git describe)
 TEMPDIR=$(mktemp -d)
 DESTDIR="/tmp"
