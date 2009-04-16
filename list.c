@@ -30,9 +30,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <omp.h>
 #include "list.h"
 
 #include <time.h>
+
+// One OpenMP lock for every hashtable entry
+omp_lock_t locks[HASH_SIZE];
 
 static uint16_t list_hash(uint32_t srcaddr, uint16_t dstport)
 {
@@ -46,8 +50,6 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
     /* allocate memory */
     incident_list_t *list = malloc(sizeof(incident_list_t) +
             HASH_SIZE * sizeof(hashtable_entry_t *));
-
-    //printf("allocating %u byte for list...\n", sizeof(incident_list_t) + HASH_SIZE * sizeof(hashtable_entry_t *));
 
     if (list == NULL) {
         fprintf(stderr, "unable to allocate %d byte of memory for list\n",
@@ -65,8 +67,6 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
         hashtable_entry_t *entry = malloc(sizeof(hashtable_entry_t) +
                                 initial_size * sizeof(incident_record_t *));
 
-        //printf("allocating %u byte for hashtable_entry...\n", sizeof(hashtable_entry_t) + initial_size * sizeof(incident_record_t));
-
         if (entry == NULL) {
             fprintf(stderr, "unable to allocate %d byte of memory for hashtable entry\n",
                     sizeof(incident_list_t) + HASH_SIZE * sizeof(hashtable_entry_t *));
@@ -75,6 +75,9 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
 
         entry->length = initial_size;
         entry->fill = 0;
+
+        // Init OpenMP lock for this hashtable entry
+        omp_init_lock(&(locks[i]));
 
         list->hashtable[i] = entry;
     }
@@ -96,6 +99,10 @@ int list_insert(incident_list_t **list, master_record_t *rec)
     /* compute the hash value (== index in hashtable) */
     uint16_t hash = list_hash(srcaddr, dstport);
 
+    // Block until lock is ready (do this BEFORE entry is set, otherwise data might get inconsistent)
+    omp_lock_t *lock = &(locks[hash]);
+    omp_set_lock(lock);
+
     /* search hashtable hashtable entry structure */
     hashtable_entry_t *entry = l->hashtable[hash];
 
@@ -113,34 +120,29 @@ int list_insert(incident_list_t **list, master_record_t *rec)
     }
 
     if (incident) {
-        //printf("found (srcaddr,dstport) ");
 
         incident->flows++;
         incident->packets += packets;
         incident->octets += octets;
 
-	// update timestamp of first and last sight
-	incident->first = (incident->first > rec->first) ? rec->first : incident->first;
-	incident->last  = (incident->last  < rec->last ) ? rec->last  : incident->last;
+        // update timestamp of first and last sight
+        incident->first = (incident->first > rec->first) ? rec->first : incident->first;
+        incident->last  = (incident->last  < rec->last ) ? rec->last  : incident->last;
 
         /* if (srcaddr, dstport) is known, check if this dstaddr is also known */
         for (unsigned int i = 0; i < incident->fill; i++) {
             if (incident->dstaddr[i] == dstaddr) {
-
                 /* if dstaddr is already in list, we're done */
-                //printf("dstaddr also found\n");
+                omp_unset_lock(lock);
                 return 0;
             }
         }
-
-        //printf("dstaddr not found\n");
 
         /* else test if there is enough storage for another dstaddr */
         if (incident->fill == incident->length) {
 
             /* allocate more memory */
             incident->length += l->increment;
-            //printf("  realloc(): %u\n", incident->length);
             incident = realloc(incident, sizeof(incident_record_t) +
                      incident->length * sizeof(uint32_t));
 
@@ -164,6 +166,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
 
             /* increase memory */
             entry->length += l->increment;
+
             entry = realloc(entry, sizeof(hashtable_entry_t) +
                      entry->length * sizeof(incident_record_t *));
 
@@ -195,8 +198,8 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         record->flows = 1;
         record->packets = packets;
         record->octets = octets;
-	record->first = rec->first;
-	record->last = rec->last;
+        record->first = rec->first;
+        record->last = rec->last;
         record->length = l->initial_size;
         record->fill = 1;
         record->dstaddr[0] = dstaddr;
@@ -204,6 +207,9 @@ int list_insert(incident_list_t **list, master_record_t *rec)
         /* store pointer to record */
         entry->records[entry->fill++] = record;
     }
+
+    // Release lock
+    omp_unset_lock(lock);
 
     return 0;
 }
@@ -214,7 +220,10 @@ int list_free(incident_list_t *list)
         for (unsigned int i = 0; i < list->hashtable[h]->fill; i++) {
             free(list->hashtable[h]->records[i]);
         }
+
+        omp_destroy_lock(&(locks[h]));
         free(list->hashtable[h]);
+
     }
     free(list);
     return 0;

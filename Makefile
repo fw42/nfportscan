@@ -1,6 +1,6 @@
 -include config.mk
 
-CFLAGS += -g -Wall -std=gnu99 -O2
+CFLAGS += -g -Wall -std=gnu99 -O2 -fopenmp
 LDFLAGS += -ladns
 
 ifeq ($(DEBUG),1)
@@ -42,3 +42,4 @@ clean:
 
 install: nfportscan
 	install -m 755 -s nfportscan /usr/local/bin/
+

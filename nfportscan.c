@@ -44,6 +44,8 @@
 #include <sys/queue.h>
 #include <time.h>
 
+#include <omp.h>
+
 #include "file.h"
 #include "list.h"
 #include "nf_common.h"
@@ -122,12 +124,13 @@ static void print_help(FILE *output)
 					"  -e  --sort-duration    sort by duration between first and last sight\n"
                     "  -a  --order-asceding   sort list ascending\n"
                     "  -d  --order-desceding  sort list descending\n"
+                    "  -p  --processors       set number of processors/threads to use (max: %d)\n"
                     "  -F  --filter           apply filter before counting\n"
                     "  -c  --csv              output data separated by TAB and NEWLINE\n"
                     "  -v  --verbose          set verbosity level\n"
                     "  -V  --version          print program version\n"
                     "  -h  --help             print this help\n",
-			DEFAULT_TIMEFORMAT
+			DEFAULT_TIMEFORMAT, omp_get_num_procs()
 	);
 }
 
@@ -184,8 +187,11 @@ static int incident_compare(const void *a, const void *b) {
 
 static int process_flow(master_record_t *mrec, incident_list_t **list)
 {
+    
     incident_list_t *l = *list;
     /* count global flows */
+
+    #pragma omp atomic
     l->flows++;
 
     /* throw away everything except TCP, UDP and ICMP IPv4 flows */
@@ -207,6 +213,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     }
 
     /* count flows */
+    #pragma omp atomic
     l->incident_flows++;
 
     /* insert into list */
@@ -232,7 +239,7 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
 static int process_file(char *file, incident_list_t **list)
 {
     if (opts.verbose)
-        printf("processing file %s\n", file);
+        printf("Thread %d: processing file %s\n", omp_get_thread_num(), file);
 
     int fd;
     if ( (fd = open(file, O_RDONLY)) == -1 ) {
@@ -356,6 +363,7 @@ static int process_file(char *file, incident_list_t **list)
         common_record_t *c = buf;
 
         while (bheader.NumBlocks--) {
+
             /* expand common record into master record */
             master_record_t mrec;
             ExpandRecord(c, &mrec);
@@ -390,6 +398,7 @@ int main(int argc, char *argv[])
 		{"sort-first", no_argument, 0, 'b'},
         {"order-ascending", no_argument, 0, 'a'},
         {"order-descending", no_argument, 0, 'd'},
+        {"processors", required_argument, 0, 'p'},
         {"filter", required_argument, 0, 'F'},
         {"csv", no_argument, 0, 'c'},
         {"version", no_argument, 0, 'V'},
@@ -407,7 +416,7 @@ int main(int argc, char *argv[])
 	opts.timeformat = DEFAULT_TIMEFORMAT;
 
     int c;
-    while ((c = getopt_long(argc, argv, "hvVbTDet:HfiPadF:cs:", longopts, 0)) != -1) {
+    while ((c = getopt_long(argc, argv, "hvVbTDet:p:HfiPadF:cs:", longopts, 0)) != -1) {
         switch (c) {
             case 'h': print_help(stdout);
                       exit(0);
@@ -421,6 +430,15 @@ int main(int argc, char *argv[])
 			case 's': opts.timeformat = malloc(strlen(optarg));
 					  strcpy(opts.timeformat, optarg);
 					  break;
+            case 'p': {
+                        unsigned int procs;
+                        if(sscanf(optarg, "%u", &procs) != 1) {
+                            fprintf(stderr, "Wrong argument (%s)\n", optarg);
+                            exit(EXIT_FAILURE);
+                        }
+                        omp_set_num_threads(procs);
+                        break;                    
+                      }
 			case 'D': opts.lastduration = 1;
 					  break;
             case 'H': opts.sort_field = SORT_HOSTS;
@@ -490,11 +508,20 @@ int main(int argc, char *argv[])
     list->flows = 0;
     list->incident_flows = 0;
 
-    while (argv[optind] != NULL)
-        process_file(argv[optind++], &list);
+    // Count number of file arguments
+    int optind_tmp = optind;
+    int num_files = 0;
+    while(argv[optind++] != NULL) num_files++;
+
+    // Read files, each file in a seperate thread
+    int i;
+    #pragma omp parallel for
+    for(i=0; i<num_files; i++) {
+        process_file(argv[optind_tmp + i], &list);
+    }
 
     if (opts.verbose)
-        printf("scanned %u flows, found %u incident flows (%.2f%%)\n", list->flows,
+        printf("Total: scanned %u flows, found %u incident flows (%.2f%%)\n", list->flows,
                 list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
 
     /* allocate memory for sorted output list */
@@ -560,8 +587,8 @@ int main(int argc, char *argv[])
             protocol = "UDP";
         else if (result.list[i].protocol == PROTO_TCP)
             protocol = "TCP";
-	else
-	    protocol = "";
+        else
+            protocol = "";
 
         if (opts.output == NORMAL) {
 
@@ -581,14 +608,14 @@ int main(int argc, char *argv[])
                         (uint8_t)result.list[i].dstport,
                         result.list[i].fill, result.list[i].flows,
                         result.list[i].packets, result.list[i].octets
-		);
+                );
             } else {
                 printf("  * %15s -> %6u (%s): %10u dsts (%7u flows, %7llu pckts, %9llu octs)",
                         src, result.list[i].dstport,
                         protocol,
                         result.list[i].fill, result.list[i].flows,
                         result.list[i].packets, result.list[i].octets
-		);
+                );
             }
 
             if(opts.showfirstlast) {
