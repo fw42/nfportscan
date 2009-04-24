@@ -688,7 +688,7 @@ int main(int argc, char *argv[])
     gettimeofday(&stop,NULL);
     print_time_usage(&start,&stop);
 //  print_memory_usage();
-    malloc_stats();
+//  malloc_stats();
     puts("");
 
     free(result.list);
