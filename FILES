@@ -1,0 +1,20 @@
+The following files are new:
+* list.{c,h}
+* nfportscan.c
+* version.h
+* Makefile
+* README
+* FILES
+
+The following files were taken from the nfdump project:
+* file.{c,h}
+* ipconv.{c,h}
+* nfcommon.{c,h}
+* nfdump.h
+* nffile.h
+* nftree.{c,h}
+* rbtree.h
+* scanner.l
+* grammer.y
+* util.{c,h}
+

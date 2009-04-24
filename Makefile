@@ -6,7 +6,7 @@
 
 -include config.mk
 
-CFLAGS += -g -Wall -std=gnu99 -O2 -fopenmp
+CFLAGS += -Wall -std=gnu99 -O2 -fopenmp
 LDFLAGS += -ladns
 
 ifeq ($(DEBUG),1)

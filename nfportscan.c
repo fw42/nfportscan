@@ -42,8 +42,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/queue.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <time.h>
 
+#include <malloc.h>
+
+// OpenMP (multithreading)
 #include <omp.h>
 
 #include "file.h"
@@ -56,7 +61,7 @@
 
 #include "version.h"
 #ifndef VERSION
-#define VERSION "(unknown, compiled from git)"
+    #define VERSION "(unknown, compiled from git)"
 #endif
 
 #define DEFAULT_TIMEFORMAT "%d.%m.%y %H:%M:%S"
@@ -97,15 +102,19 @@ typedef struct {
         SORT_ASC,
     } sort_order;
     char *filter;
-    FilterEngine_data_t *engine;
     enum {
         NORMAL,
         CSV,
     } output;
+    // This is an array of pointers because we use one
+    // filter engine for each thread. Otherwise, they will interfere somehow
+    // and things go bad.
+    FilterEngine_data_t **engine;
 } options_t;
 
 options_t opts;
 
+/** Print usage dialog (-h) */
 static void print_help(FILE *output)
 {
     fprintf(output, "USAGE: nfportscan [OPTIONS] FILE [FILE] ...\n"
@@ -134,6 +143,21 @@ static void print_help(FILE *output)
 	);
 }
 
+void print_memory_usage(void) {
+    struct mallinfo stats = mallinfo();
+    printf("Allocated heap memory: %u bytes (%u bytes used)\n", stats.arena, stats.uordblks);
+}
+
+void print_time_usage(struct timeval *start, struct timeval *stop) {
+
+    unsigned long int seconds = stop->tv_sec - start->tv_sec;
+    unsigned int minutes = seconds / 60;
+    seconds %= 60;
+    printf("Time needed to analyze files: %u minutes %lu seconds\n", minutes, seconds);
+
+}
+
+/** Compare two incidents (used by quicksort) */
 static int incident_compare(const void *a, const void *b) {
     incident_record_t *ia = (incident_record_t *)a;
     incident_record_t *ib = (incident_record_t *)b;
@@ -189,8 +213,8 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
 {
     
     incident_list_t *l = *list;
-    /* count global flows */
 
+    /* count global flows */
     #pragma omp atomic
     l->flows++;
 
@@ -204,8 +228,8 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     /* test, if either the master record matches the filter expression, or no
      * filter has been given */
     if ( opts.filter ) {
-        opts.engine->nfrecord = (uint64_t *)mrec;
-        if (opts.engine->FilterEngine(opts.engine) == 0) {
+        opts.engine[omp_get_thread_num()]->nfrecord = (uint64_t *)mrec;
+        if (opts.engine[omp_get_thread_num()]->FilterEngine(opts.engine[omp_get_thread_num()]) == 0) {
             if (opts.verbose >= 4)
                 printf("flow record failed to pass filter\n");
             return 0;
@@ -238,10 +262,10 @@ static int process_flow(master_record_t *mrec, incident_list_t **list)
     return 1;
 }
 
-static int process_file(char *file, incident_list_t **list)
+static int process_file(char *file, incident_list_t **list, int filenum, int totalfiles)
 {
     if (opts.verbose)
-        printf("Thread %d: processing file %s\n", omp_get_thread_num(), file);
+        printf("Thread %d: processing file %2d of %d: %s\n", omp_get_thread_num(), filenum, totalfiles, file);
 
     int fd;
     if ( (fd = open(file, O_RDONLY)) == -1 ) {
@@ -349,7 +373,7 @@ static int process_file(char *file, incident_list_t **list)
             fprintf(stderr, "unable to allocate %d byte of memory (malloc(): %s)\n", bheader.size, strerror(errno));
             
             if(errno == ENOMEM) {
-                return -1;
+                fprintf(stderr, "probably not enough memory :-(\n");
             }
 
             exit(3);
@@ -416,11 +440,20 @@ int main(int argc, char *argv[])
         { NULL, 0, 0, 0 }
     };
 
+    struct timeval start, stop;
+    gettimeofday(&start,NULL);
+
     /* initialize options */
     opts.verbose = 0;
     opts.threshhold = 100;
     opts.filter = NULL;
-    opts.engine = NULL;
+    opts.engine = malloc(sizeof(FilterEngine_data_t*) * omp_get_num_procs());
+    
+    int i;
+    for(i=0; i<omp_get_num_procs(); i++) {
+        opts.engine[i] = NULL;
+    }
+
     opts.sort_field = SORT_HOSTS;
     opts.sort_order = SORT_DESC;
     opts.output = NORMAL;
@@ -469,10 +502,13 @@ int main(int argc, char *argv[])
             case 'd': opts.sort_order = SORT_DESC;
                       break;
             case 'F': opts.filter = optarg;
-                      opts.engine = CompileFilter(optarg);
-                      if (!opts.engine) {
-                          fprintf(stderr, "filter parse failed\n");
-                          exit(254);
+                      for(i=0; i<omp_get_num_procs(); i++) {
+                          opts.engine[i] = CompileFilter(optarg);
+
+                          if (!opts.engine[i]) {
+                              fprintf(stderr, "filter parse failed\n");
+                              exit(254);
+                          }
                       }
                       break;
             case 'c': opts.output = CSV;
@@ -511,8 +547,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (argv[optind] == NULL)
+    if (argv[optind] == NULL) {
         printf("no files given, use %s --help for more information\n", argv[0]);
+        exit(0);
+    }
 
     /* init incident list */
     incident_list_t *list = list_init(INCIDENT_LIST_INITIAL, INCIDENT_LIST_EXPAND);
@@ -525,13 +563,9 @@ int main(int argc, char *argv[])
     while(argv[optind++] != NULL) num_files++;
 
     // Read files, each file in a seperate thread
-    int errors = 0;
-    int i;
     #pragma omp parallel for
     for(i=0; i<num_files; i++) {
-        if(process_file(argv[optind_tmp + i], &list) != 0) {
-            errors++;
-        }
+        process_file(argv[optind_tmp + i], &list, i, num_files);
     }
 
     if (opts.verbose)
@@ -650,12 +684,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(errors) {
-        fprintf(stderr, "\nWARNING: There were errors in %d files. Is it possible that not all files have been analyzed correctly.\n\n", errors);
-    }
+    puts("");
+    gettimeofday(&stop,NULL);
+    print_time_usage(&start,&stop);
+//  print_memory_usage();
+    malloc_stats();
+    puts("");
 
     free(result.list);
     list_free(list);
+    free(opts.engine);
 
     return EXIT_SUCCESS;
 }

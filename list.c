@@ -37,7 +37,7 @@
 
 
 // One OpenMP lock for every hashtable entry
-omp_lock_t locks[HASH_SIZE];
+omp_lock_t *locks;
 
 static uint16_t list_hash(uint32_t srcaddr, uint16_t dstport)
 {
@@ -62,6 +62,14 @@ incident_list_t *list_init(unsigned int initial_size, unsigned int increment)
     list->incident_flows = 0;
     list->initial_size = initial_size;
     list->increment = increment;
+
+    // Initialize memory for locks on heap (NOT stack!!)
+    locks = malloc(sizeof(omp_lock_t) * HASH_SIZE);
+    if(locks == NULL) {
+        fprintf(stderr, "unable to allocate %d byte of memory for OpenMP locks (malloc(): %s)\n",
+            sizeof(omp_lock_t) * HASH_SIZE, strerror(errno));
+        exit(3);
+    }
 
     for (unsigned int i = 0; i < HASH_SIZE; i++) {
         /* allocate memory for hashtable entry */
@@ -156,7 +164,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
                     sizeof(incident_record_t) + tmplen * sizeof(uint32_t), strerror(errno));
 
                 if(errno == ENOMEM) {
-                    return -1;
+                    fprintf(stderr, "probably not enough memory :-(\n");
                 }
 
                 exit(3);
@@ -188,7 +196,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
                       sizeof(hashtable_entry_t) + tmplen * sizeof(incident_record_t *), strerror(errno));
 
                 if(errno == ENOMEM) {
-                    return -1;
+                    fprintf(stderr, "probably not enough memory :-(\n");
                 }
 
                 exit(3);
@@ -207,7 +215,7 @@ int list_insert(incident_list_t **list, master_record_t *rec)
                     sizeof(incident_record_t) + l->initial_size * sizeof(uint32_t), strerror(errno));
 
             if(errno == ENOMEM) {
-                return -1;
+                fprintf(stderr, "probably not enough memory :-(\n");
             }
 
             exit(3);
@@ -247,6 +255,7 @@ int list_free(incident_list_t *list)
         free(list->hashtable[h]);
 
     }
+    free(locks);
     free(list);
     return 0;
 }
