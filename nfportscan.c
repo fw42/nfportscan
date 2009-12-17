@@ -568,10 +568,6 @@ int main(int argc, char *argv[])
         process_file(argv[optind_tmp + i], &list, i, num_files);
     }
 
-    if (opts.verbose)
-        printf("Total: scanned %u flows, found %u incident flows (%.2f%%)\n", list->flows,
-                list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
-
     /* allocate memory for sorted output list */
     struct {
         unsigned int fill;
@@ -613,6 +609,10 @@ int main(int argc, char *argv[])
             }
         }
     }
+
+//  if (opts.verbose)
+        printf("Total: %u hits. Scanned %u flows, found %u incident flows (%.2f%%)\n\n", result.fill, list->flows,
+                list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
 
     if (opts.verbose)
         printf("sorting result list...\n");
