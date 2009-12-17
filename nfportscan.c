@@ -670,7 +670,7 @@ int main(int argc, char *argv[])
 				printf("  (%s, %s)", buf_first, buf_last);
             }
 
-		printf(" (%3.2f o/d)",  ((float)result.list[i].octets) / result.list[i].fill);
+		printf(" (%llu o/d, %llu o/p, %llu o/f)",  result.list[i].octets / result.list[i].fill, result.list[i].octets / result.list[i].packets, result.list[i].octets / result.list[i].flows);
 
             puts("");
 
