@@ -669,6 +669,9 @@ int main(int argc, char *argv[])
             if(opts.showfirstlast) {
 				printf("  (%s, %s)", buf_first, buf_last);
             }
+
+		printf(" (%3.2f o/d)",  ((float)result.list[i].octets) / result.list[i].fill);
+
             puts("");
 
         } else { /* opts.output == CSV */
