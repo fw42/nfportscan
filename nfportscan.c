@@ -45,7 +45,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <time.h>
-
+#include <limits.h>
 #include <malloc.h>
 
 // OpenMP (multithreading)
