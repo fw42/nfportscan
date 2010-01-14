@@ -610,9 +610,44 @@ int main(int argc, char *argv[])
         }
     }
 
-//  if (opts.verbose)
-        printf("Total: %u hits. Scanned %u flows, found %u incident flows (%.2f%%)\n\n", result.fill, list->flows,
+    // Determine maximum and average o/d values and count how many hosts are above twice the average
+    unsigned int max_od = 0, avg_od = 0, avg_cnt = 0, above_avg = 0, min_od = UINT_MAX;
+
+    if(opts.output == NORMAL) {
+      for(unsigned int i = 0; i < result.fill; i++) {
+     
+        if(result.list[i].protocol != PROTO_ICMP) {
+
+          if(result.list[i].octets / result.list[i].fill > max_od) {
+            max_od = result.list[i].octets / result.list[i].fill;
+          }
+
+          if(result.list[i].octets / result.list[i].fill < min_od) {
+            min_od = result.list[i].octets / result.list[i].fill;
+          }
+
+          avg_od += result.list[i].octets / result.list[i].fill;
+          avg_cnt++;
+
+        }
+ 
+      }
+
+      if(avg_cnt > 0) {
+        avg_od /= avg_cnt;
+      }
+
+      for(unsigned int i = 0; i < result.fill; i++) {
+        if(result.list[i].protocol != PROTO_ICMP && result.list[i].octets / result.list[i].fill > 3 * avg_od) {
+          above_avg++;
+        }
+      }
+
+      printf("Total: %u hits. Scanned %u flows, found %u incident flows (%.2f%%)\n", result.fill, list->flows,
                 list->incident_flows, (double)list->incident_flows/(double)list->flows * 100);
+      printf("o/d min: %u, o/d max: %u, o/d avg: %u, suspicously high o/d: %u hosts\n", min_od, max_od, avg_od, above_avg);
+      printf("\n");
+    }
 
     if (opts.verbose)
         printf("sorting result list...\n");
