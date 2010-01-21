@@ -11,13 +11,12 @@
 /* from common.h */
 typedef void* pointer_addr_t;
 
-
 /* from nffile.h */
 #define IdentLen	128
 #define IdentNone	"none"
 
-#define FILE_MAGIC   0xA50C
-#define FILE_VERSION 1
+#define FILE_MAGIC	0xA50C
+#define FILE_VERSION	1
 
 #include "nffile.h"
 
