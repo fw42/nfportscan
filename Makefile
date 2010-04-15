@@ -6,7 +6,7 @@
 
 -include config.mk
 
-CFLAGS += -Wall -std=gnu99 -O2 -fopenmp
+CFLAGS += -Wall -std=gnu99 -O2 -fopenmp -g -ggdb3
 LDFLAGS += -ladns
 
 ifeq ($(DEBUG),1)
@@ -23,7 +23,7 @@ endif
 
 all: nfportscan
 
-nfportscan: file.o list.o nftree.o grammar.o scanner.o util.o ipconv.o nf_common.o version.h
+nfportscan: file.o list.o nftree.o grammar.o scanner.o util.o ipconv.o nf_common.o version.h convert.o
 
 version.h:
 	@echo "#define VERSION \"$(shell git describe)\"" > version.h

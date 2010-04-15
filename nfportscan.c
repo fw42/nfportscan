@@ -57,6 +57,7 @@
 #include "nfdump.h"
 #include "nffile.h"
 #include "nftree.h"
+#include "convert.h"
 
 #include "version.h"
 #ifndef VERSION
@@ -398,7 +399,7 @@ static int process_file(char *file, incident_list_t **list, int filenum, int tot
 			printf("        id: %d\n", bheader.id);
 		}
 
-		if (bheader.id != DATA_BLOCK_TYPE_1) {
+		if (bheader.id != DATA_BLOCK_TYPE_1 && bheader.id != DATA_BLOCK_TYPE_2) {
 			fprintf(stderr, "%s: data block has unknown id %d\n", file, bheader.id);
 		}
 
@@ -432,6 +433,12 @@ static int process_file(char *file, incident_list_t **list, int filenum, int tot
 		common_record_t *c = buf;
 
 		while (bheader.NumBlocks--) {
+
+			/* if this is a v2 data block (which is default with nfdump >=1.6.x),
+			   convert it back to v1 format (which was default in <1.6.x) */
+			if(bheader.id == DATA_BLOCK_TYPE_2) {
+				convert_v2_to_v1(c);
+			}
 
 			/* expand common record into master record */
 			master_record_t mrec;
@@ -683,7 +690,7 @@ int main(int argc, char *argv[]) {
 	result.list = malloc(SORT_LIST_INITIAL * sizeof(incident_record_t));
 
 	if (result.list == NULL) {
-		fprintf(stderr, "unable to allocate %d byte of memory for sorted list (malloc(): %s)\n",
+		fprintf(stderr, "unable to allocate %lu byte of memory for sorted list (malloc(): %s)\n",
 			result.length * sizeof(incident_record_t), strerror(errno));
 		exit(3);
 	}
@@ -790,12 +797,17 @@ int main(int argc, char *argv[]) {
 		if (opts.output == NORMAL) {
 
 			char buf_first[100], buf_last[100];
-			strftime(buf_first, 100, opts.timeformat, localtime((time_t*)&(result.list[i].first)));
+
+			time_t t;
+			t = result.list[i].first;
+
+			strftime(buf_first, 100, opts.timeformat, localtime(&t));
 
 			if(opts.lastduration) {
 				snprintf(buf_last,  100, "%02d min %02d sec", (result.list[i].last - result.list[i].first) / 60, (result.list[i].last - result.list[i].first) % 60);
 			} else {
-				strftime(buf_last,  100, opts.timeformat, localtime((time_t*)&(result.list[i].last) ));
+				t = result.list[i].last;
+				strftime(buf_last,  100, opts.timeformat, localtime(&t));
 			}
 
 			if (result.list[i].protocol == PROTO_ICMP) {
