@@ -1,12 +1,12 @@
 # nfportscan Makefile
 # 
 #  Alexander Neumann <alexander@bumpern.de>
-#  Florian Weingarten <weingarten@rz.rwth-aachen.de>
+#  Florian Weingarten <flo@hackvalue.de>
 #
 
 -include config.mk
 
-CFLAGS += -Wall -std=gnu99 -O2 -fopenmp -g -ggdb3
+CFLAGS += -Wall -std=gnu99 -O2 -fopenmp
 LDFLAGS += -ladns
 
 ifeq ($(DEBUG),1)

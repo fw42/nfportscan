@@ -3,7 +3,7 @@
  *              from cisco netflow data files
  *
  * (c) by Alexander Neumann <alexander@bumpern.de>
- *        Florian Weingarten <weingarten@rz.rwth-aachen.de>
+ *        Florian Weingarten <flo@hackvalue.de>
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
