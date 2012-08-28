@@ -1,4 +1,5 @@
 The following files are new:
+* convert.{c,h}
 * list.{c,h}
 * nfportscan.c
 * version.h
@@ -17,4 +18,3 @@ The following files were taken from the nfdump project:
 * scanner.l
 * grammer.y
 * util.{c,h}
-
