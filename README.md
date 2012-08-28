@@ -17,7 +17,7 @@ at the
 of
 [RWTH-Aachen University](http://www.rwth-aachen.de/) (Germany)
 by
-[Alexander Neumann](mailto:alexander@bumpern.de)
+[Alexander Neumann](mailto:alexander@bumpern.de) ([fd0](http://github.com/fd0/))
 and
 [Florian Weingarten](mailto:flo@hackvalue.de)
 under the supervision of
