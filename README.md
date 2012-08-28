@@ -19,7 +19,7 @@ of
 by
 [Alexander Neumann](mailto:alexander@bumpern.de) ([fd0](http://github.com/fd0/))
 and
-[Florian Weingarten](mailto:flo@hackvalue.de)
+[Florian Weingarten](mailto:flo@hackvalue.de) ([fw42](http://github.com/fw42/))
 under the supervision of
 [Jens Hektor](mailto:hektor@rz.rwth-aachen.de).
 
